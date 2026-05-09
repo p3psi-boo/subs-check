@@ -89,8 +89,13 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	subUrls, localNum, remoteNum, historyNum := resolveSubUrls()
 	logSubscriptionStats(len(subUrls), localNum, remoteNum, historyNum)
 
-	// 增大缓冲，减少消费者阻塞
-	proxyChan := make(chan ProxyNode, 100000)
+	fetchConcurrency := subscriptionFetchConcurrency()
+	bufferSize := max(1000, fetchConcurrency*1000)
+	bufferSize = min(bufferSize, 100000)
+	initialNodeCapacity := max(4096, len(subUrls)*2048)
+	initialNodeCapacity = min(initialNodeCapacity, 200000)
+
+	proxyChan := make(chan ProxyNode, bufferSize)
 
 	// 定义优先级常量
 	const (
@@ -108,10 +113,10 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 		// 存储去重后的节点。
 		// Key 为节点指纹，Value 为节点数据。
 		// 当指纹冲突时，保留优先级较高的版本 (Success > History > Normal)。
-		uniqueNodes = make(map[string]ProxyNode, 200000)
+		uniqueNodes = make(map[string]ProxyNode, initialNodeCapacity)
 
 		// 记录已存储节点的优先级，用于比较
-		nodeKeepLevels = make(map[string]int, 200000)
+		nodeKeepLevels = make(map[string]int, initialNodeCapacity)
 
 		// 订阅统计
 		subNodeCounts = make(map[string]int)
@@ -192,15 +197,14 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	}
 
 	// 获取订阅节点，生成proxyChan
-	concurrency := min(config.GlobalConfig.Concurrent, minCurrency)
+	concurrency := min(fetchConcurrency, minCurrency)
 	sem := make(chan struct{}, concurrency)
 	listenPort := strings.TrimPrefix(config.GlobalConfig.ListenPort, ":")
-	subStorePort := strings.TrimPrefix(config.GlobalConfig.SubStorePort, ":")
 
 	for _, subURL := range subUrls {
 		wg.Add(1)
 		sem <- struct{}{}
-		isSucced, isHistory, tag := identifyLocalSubType(subURL, listenPort, subStorePort)
+		isSucced, isHistory, tag := identifyLocalSubType(subURL, listenPort)
 		go func(u, t string, succ, hist bool) {
 			defer wg.Done()
 			defer func() { <-sem }()
@@ -250,6 +254,14 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 		"丢弃", rawCount-len(finalProxies),
 	)
 	return finalProxies, rawCount, finalSuccCount, finalHistCount, nil
+}
+
+func subscriptionFetchConcurrency() int {
+	concurrency := config.GlobalConfig.Concurrent
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+	return min(concurrency, 50)
 }
 
 // processSubscription 单个订阅的处理流程
@@ -662,18 +674,10 @@ func resolveSubUrls() ([]string, int, int, int) {
 
 	if len(config.GlobalConfig.SubUrlsRemote) != 0 {
 		slog.Info("获取远程订阅列表")
-		for _, subURLRemote := range config.GlobalConfig.SubUrlsRemote {
-			// 处理为标准的raw地址
-			subURLRemote = NormalizeGitHubRawURL(subURLRemote)
-			warped := utils.WarpURL(subURLRemote, utils.IsGhProxyAvailable)
-			if remote, err := fetchRemoteSubUrls(warped); err != nil {
-				if !errors.Is(err, ErrIgnore) {
-					logFatal(err, subURLRemote)
-				}
-			} else {
-				remoteNum += len(remote)
-				urls = append(urls, remote...)
-			}
+		remoteGroups := fetchRemoteSubUrlGroups(config.GlobalConfig.SubUrlsRemote)
+		for _, remote := range remoteGroups {
+			remoteNum += len(remote)
+			urls = append(urls, remote...)
 		}
 	} else {
 		slog.Info("获取订阅列表")
@@ -734,6 +738,62 @@ func resolveSubUrls() ([]string, int, int, int) {
 	return out, localNum, remoteNum, historyNum
 }
 
+func fetchRemoteSubUrlGroups(remotes []string) [][]string {
+	if len(remotes) == 0 {
+		return nil
+	}
+
+	type remoteResult struct {
+		idx  int
+		urls []string
+	}
+
+	concurrency := min(subscriptionFetchConcurrency(), 8)
+	sem := make(chan struct{}, concurrency)
+	results := make(chan remoteResult, len(remotes))
+	var wg sync.WaitGroup
+
+	for idx, subURLRemote := range remotes {
+		idx, subURLRemote := idx, strings.TrimSpace(subURLRemote)
+		if subURLRemote == "" || strings.HasPrefix(subURLRemote, "#") {
+			continue
+		}
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			normalized := NormalizeGitHubRawURL(subURLRemote)
+			warped := utils.WarpURL(normalized, utils.IsGhProxyAvailable)
+			remote, err := fetchRemoteSubUrls(warped)
+			if err != nil {
+				if !errors.Is(err, ErrIgnore) {
+					logFatal(err, subURLRemote)
+				}
+				return
+			}
+			results <- remoteResult{idx: idx, urls: remote}
+		}()
+	}
+
+	wg.Wait()
+	close(results)
+
+	ordered := make([][]string, len(remotes))
+	for result := range results {
+		ordered[result.idx] = result.urls
+	}
+
+	out := make([][]string, 0, len(ordered))
+	for _, urls := range ordered {
+		if len(urls) > 0 {
+			out = append(out, urls)
+		}
+	}
+	return out
+}
+
 // fetchRemoteSubUrls 从远程地址读取订阅URL清单
 func fetchRemoteSubUrls(listURL string) ([]string, error) {
 	if listURL == "" {
@@ -792,7 +852,7 @@ func fetchRemoteSubUrls(listURL string) ([]string, error) {
 }
 
 // identifyLocalSubType 识别本地订阅源类型
-func identifyLocalSubType(subURL, listenPort, storePort string) (isLatest, isHistory bool, tag string) {
+func identifyLocalSubType(subURL, listenPort string) (isLatest, isHistory bool, tag string) {
 	u, err := url.Parse(subURL)
 	if err != nil {
 		return false, false, ""
@@ -806,8 +866,8 @@ func identifyLocalSubType(subURL, listenPort, storePort string) (isLatest, isHis
 		return false, false, tag
 	}
 
-	// 端口必须匹配当前服务端口或存储端口
-	if port != listenPort && port != storePort {
+	// 端口必须匹配当前服务端口。
+	if port != listenPort {
 		return false, false, tag
 	}
 

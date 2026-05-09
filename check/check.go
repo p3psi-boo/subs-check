@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"net"
 	"net/http"
 	"regexp"
@@ -277,7 +276,7 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 		capacity := int64(rate / 10)
 		Bucket = ratelimit.NewBucketWithRate(rate, capacity)
 	} else {
-		Bucket = ratelimit.NewBucketWithRate(float64(math.MaxInt64), int64(math.MaxInt64))
+		Bucket = nil
 	}
 
 	// // 初始化全局上下文
@@ -1072,7 +1071,6 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 
 	statsTransport := &StatsTransport{}
 	var baseTransport *http.Transport
-	networkLimitDefault := true
 
 	baseTransport = &http.Transport{
 		DialContext: func(reqCtx context.Context, network, addr string) (net.Conn, error) {
@@ -1114,18 +1112,12 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 				Conn:         rawConn,
 				readCounter:  &statsTransport.BytesRead,
 				writeCounter: &statsTransport.BytesWritten,
-				networkLimit: networkLimitDefault,
 			}, nil
 		},
 		DisableKeepAlives:   false,
 		Proxy:               nil,
 		IdleConnTimeout:     5 * time.Second,
 		MaxIdleConnsPerHost: 5,
-	}
-
-	// HTTP/2 判断
-	if baseTransport.ForceAttemptHTTP2 || len(baseTransport.TLSNextProto) > 0 {
-		networkLimitDefault = false
 	}
 
 	statsTransport.Base = baseTransport
@@ -1211,17 +1203,12 @@ type countingConn struct {
 	net.Conn
 	readCounter  *atomic.Uint64
 	writeCounter *atomic.Uint64
-	networkLimit bool
 }
 
 func (c *countingConn) Read(b []byte) (int, error) {
 	n, err := c.Conn.Read(b)
 	if n > 0 {
 		c.readCounter.Add(uint64(n))
-		// 在连接层消耗 token
-		if Bucket != nil && c.networkLimit {
-			Bucket.Wait(int64(n))
-		}
 	}
 	return n, err
 }

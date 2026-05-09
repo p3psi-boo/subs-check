@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand/v2" 
+	"math/rand/v2"
 	"net/http"
 	"strings"
 	"time"
@@ -114,10 +114,15 @@ func CheckSpeed(httpClient *http.Client, bucket *ratelimit.Bucket, getNetBytes f
 		limit:       limit,
 	}
 
+	var reader io.Reader = limitedReader
+	if bucket != nil {
+		reader = ratelimit.Reader(reader, bucket)
+	}
+
 	// 执行下载 (io.Copy)
 	startTime := time.Now()
 	// copiedBytes，以便在 getNetBytes 失败时兜底
-	copiedBytes, err := io.Copy(io.Discard, limitedReader)
+	copiedBytes, err := io.Copy(io.Discard, reader)
 
 	// 如果错误是“超时”或“EOF”，这是测速的正常结束状态，不应视为 Failure
 	if err != nil && err != io.EOF && err != context.DeadlineExceeded && err != context.Canceled {
