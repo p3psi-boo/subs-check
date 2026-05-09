@@ -19,6 +19,8 @@
 15. **Package-level regex pre-compilation** — `mediaTagRegex` in `check.go` and `tiktokRegionRegex` in `tiktok.go`; removes per-node compilation hotspots
 16. **GOGC tuning (SetGCPercent 10) during `check.Check()`** — Peak RSS ~46-47MB vs ~57-58MB baseline (-18%). Peak heap cut from ~17MB to ~5.5MB (-51%). Triggered by detection-phase massive temporary allocations.
 17. **Lazy ProxyClient creation** — Move `CreateClient` from `distributeJobs` to `runAliveStage` workers. aliveChan buffer now holds lightweight jobs (map only) instead of heavyweight mihomo proxies. Peak concurrent proxies cut from ~110 to ~50. Combined with GOGC=10: peak RSS ~46-51MB, best 46.14 MB (-19.5% from baseline). **24.3× confidence.**
+18. **Dedup map capacity 2048→512 per sub** — Less empty map overhead during subscription parsing, faster GC scans. Best 46.29 MB. **21.3× confidence.**
+19. **Structured slog in `CreateClient` hot path** — Replace `fmt.Sprintf` with `slog.Debug("msg", "key", value)` to avoid string formatting for disabled log levels. Code quality win.
 
 ## Attempted & Reverted (No Benefit or Worse)
 
@@ -50,6 +52,9 @@
 | GOGC env 50 (whole program) | ~52 MB peak RSS | Code-level equivalent: `debug.SetGCPercent(50)` in `check.Check()` |
 | GOGC 50→25 in `check.Check()` | ~48 MB peak RSS | Further improvement; diminishing returns |
 | GOGC 25→10 in `check.Check()` | ~46-47 MB peak RSS | **Keep**: best result, stable across 3+ runs, no duration regression |
+| **Lazy ProxyClient creation** | Peak RSS ~46-51 MB (best 46.14) | **Keep**: aliveChan buffer no longer holds heavy mihomo proxies. Peak concurrent proxies cut from ~110 to ~50. 24.3× confidence |
+| Map capacity 2048→512 per sub | Peak RSS ~46-47 MB (best 46.29) | **Keep**: less empty map overhead, faster GC scans. 21.3× confidence |
+| `fmt.Sprintf` → structured slog in `CreateClient` | RSS stable | **Keep**: removes per-node string formatting in hot path. Code quality win |
 
 ## Root-Cause Analysis (From Real Flamegraphs)
 
