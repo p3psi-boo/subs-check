@@ -21,6 +21,7 @@
 17. **Lazy ProxyClient creation** — Move `CreateClient` from `distributeJobs` to `runAliveStage` workers. aliveChan buffer now holds lightweight jobs (map only) instead of heavyweight mihomo proxies. Peak concurrent proxies cut from ~110 to ~50. Combined with GOGC=10: peak RSS ~46-51MB, best 46.14 MB (-19.5% from baseline). **24.3× confidence.**
 18. **Dedup map capacity 2048→512 per sub** — Less empty map overhead during subscription parsing, faster GC scans. Best 46.29 MB. **21.3× confidence.**
 19. **Structured slog in `CreateClient` hot path** — Replace `fmt.Sprintf` with `slog.Debug("msg", "key", value)` to avoid string formatting for disabled log levels. Code quality win.
+20. **Disable idle connection pool in check Transport** — `IdleConnTimeout` 2s→0, `MaxIdleConnsPerHost` 2→0. Prevents failed proxy connections from accumulating in the Transport idle pool. Combined with all previous: peak RSS ~41.8 MB vs ~57.5MB baseline (-27%). **22.5× confidence.**
 
 ## Attempted & Reverted (No Benefit or Worse)
 
@@ -52,6 +53,11 @@
 | GOGC env 50 (whole program) | ~52 MB peak RSS | Code-level equivalent: `debug.SetGCPercent(50)` in `check.Check()` |
 | GOGC 50→25 in `check.Check()` | ~48 MB peak RSS | Further improvement; diminishing returns |
 | GOGC 25→10 in `check.Check()` | ~46-47 MB peak RSS | **Keep**: best result, stable across 3+ runs, no duration regression |
+| GOGC 10→5 in `check.Check()` | ~45-48 MB peak RSS, duration ~29s | **Revert**: marginal RSS improvement, duration regression on slow runs |
+| aliveChan 1.2x→1x with lazy creation | RSS +2MB (48.88) | **Revert**: 1.2x remains sweet spot even with lightweight buffered jobs |
+| aliveChan 1.2x→aliveConc/2 with lazy creation | Within noise (46.34-52.17) | **Revert**: no clear improvement, keep 1.2x for stability |
+| Periodic `FreeOSMemory()` during detection | RSS +5MB (51.80) | **Revert**: adds CPU overhead, no benefit when GOGC=10 keeps heap tight |
+| `MaxIdleConnsPerHost` 2→0, `IdleConnTimeout` 2s→0 | **Peak RSS ~41.8 MB** | **Keep**: eliminates idle connection pool accumulation across failed checks |
 | **Lazy ProxyClient creation** | Peak RSS ~46-51 MB (best 46.14) | **Keep**: aliveChan buffer no longer holds heavy mihomo proxies. Peak concurrent proxies cut from ~110 to ~50. 24.3× confidence |
 | Map capacity 2048→512 per sub | Peak RSS ~46-47 MB (best 46.29) | **Keep**: less empty map overhead, faster GC scans. 21.3× confidence |
 | `fmt.Sprintf` → structured slog in `CreateClient` | RSS stable | **Keep**: removes per-node string formatting in hot path. Code quality win |
