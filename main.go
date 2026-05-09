@@ -1,4 +1,3 @@
-//go:generate go-winres make --in winres/winres.json --product-version=git-tag --file-version=git-tag --arch=amd64,386,arm64
 package main
 
 import (
@@ -21,8 +20,6 @@ func main() {
 
 	// 初始化应用
 	application := app.New(Version, fmt.Sprintf("%s-%s", Version, CurrentCommit), *flagConfigPath)
-	// 版本更新成功通知
-	application.InitUpdateInfo()
 	slog.Info(fmt.Sprintf("当前版本: %s-%s", Version, CurrentCommit))
 
 	if err := application.Initialize(); err != nil {

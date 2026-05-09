@@ -368,10 +368,6 @@ main {
   margin-right: 4px;
 }
 
-#sub-store.sidebar-icon {
-  stroke-width: 0;
-}
-
 .list-item {
   width: 100%;
   /* ✅ 占满父容器宽度 */
@@ -898,8 +894,7 @@ main {
 }
 
 #btnlogoutMobile,
-#btnShare,
-#btnSubStore {
+#btnShare {
   display: none;
 }
 
@@ -1613,8 +1608,7 @@ main {
 
   /* 小屏显示退出和分享按钮 */
   #btnlogoutMobile,
-  #btnShare,
-  #btnSubStore {
+  #btnShare {
     display: inline-block;
   }
 

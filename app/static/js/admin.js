@@ -9,7 +9,6 @@
     version: '/api/version',
     trigger: '/api/trigger-check',
     forceClose: '/api/force-close',
-    singboxVersions: '/api/singbox-versions',
     publicVersion: '/admin/version'
   };
 
@@ -98,13 +97,6 @@
   let checkStartTime = null;
   let codeMirrorView = null;
 
-  // Sub-Store 跳转缓存
-  let _cachedSubStoreConfig = null;
-  let lastSubStorePath = null;
-
-  // 分享按钮缓存
-  let cachedConfigPayload = null;
-  let cachedSingboxVersions = null;
 
   // ==================== 核心工具函数 ====================
 
@@ -1459,205 +1451,10 @@
     if (iconEl) iconEl.innerHTML = cfg.icon;
   }
 
-  // ==================== Sub-Store & Share ====================
+  // ==================== Share ====================
 
-  /**
-   * 获取 sub-store 配置，主要包括 sub-store 路径和端口。
-   *
-   * @async
-   * @returns {Object} 配置对象
-   * @returns {string} returns.subStorePath sub-store 的路径
-   * @returns {string|number} returns.portStr sub-store 的端口号
-   *
-   * @throws {Error} 当配置读取失败时抛出异常
-   *
-   * @example
-   * const cfg = await fetchSubStoreConfig();
-   * console.log(cfg.subStorePath,cfg.subStorePathYaml, cfg.portStr);
-   */
-  async function fetchSubStoreConfig() {
-    const r = await sfetch(API.config);
-    if (!r.ok) throw new Error("读取配置失败");
-    const config = YAML.parse(r.payload?.content ?? '');
-    return {
-      subStorePath: r.payload?.sub_store_path ?? '',
-      subStorePathYaml: config["sub-store-path"],
-      portStr: config["sub-store-port"]
-    };
-  }
-
-  /**
-   * 构建 Sub-Store 访问 URL
-   * @param {Object} config 配置对象
-   * @param {string} config.subStorePath sub-store 路径
-   * @param {string|number} config.portStr sub-store 端口
-   * @returns {Object} 包含完整 URL 和 subStorePath
-   */
-  function buildSubStoreUrl(config) {
-    const { subStorePath, subStorePathYaml, portStr } = config;
-    if (!subStorePath) throw new Error("配置中未找到 sub_store_path");
-    if (!subStorePathYaml || subStorePathYaml == '') showToast("您未设置sub-store-path，当前使用随机值。请尽快设置！", "warn")
-
-    let path = subStorePath;
-    if (path && !path.startsWith('/') && path.length > 1) {
-      path = '/' + path;
-    }
-
-    const cleanPort = (portStr ?? "").toString().trim().replace(/^:/, "");
-    const currentPort = window.location.port;
-    const shouldAddPort = currentPort && currentPort !== '';
-    const portToAdd = (shouldAddPort && cleanPort) ? ':' + cleanPort : '';
-
-    let hostname = window.location.hostname;
-    if (!shouldAddPort) {
-      const parts = hostname.split(".");
-      // 防止 IP 地址访问时生成错误的域名 (如: sub_store.104.56.43.43)
-      const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(hostname);
-      if (parts.length > 1 && !isIp) {
-        hostname = parts.length === 2 ? "sub_store_for_subs_check." + hostname : "sub_store_for_subs_check." + parts.slice(1).join(".");
-      }
-    }
-
-    const isFirstTime = lastSubStorePath === null;
-    const isPathChanged = lastSubStorePath !== subStorePath;
-    const baseUrl = window.location.protocol + '//' + hostname + portToAdd;
-
-    return {
-      url: (isFirstTime || isPathChanged) ? `${baseUrl}?api=${path}` : baseUrl,
-      subStorePath
-    };
-  }
-
-  /**
-   * 打开并处理 Sub-Store 管理窗口
-   * @param {Event} e 点击事件对象
-   * @returns {Promise<void>} 异步操作，无返回值
-   */
-  async function handleOpenSubStore(e) {
-    e.preventDefault();
-    if (!sessionKey) { showLogin(true); return; }
-
-    const newWindow = window.open('', '_blank');
-    if (!newWindow) { showToast('窗口弹出被拦截', 'warn'); return; }
-
-    // 1. 设置初始 Loading 界面
-    newWindow.document.title = "正在连接 Sub-Store...";
-    newWindow.document.body.style.margin = "0";
-    newWindow.document.body.innerHTML = `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f9f9f9;color:#333;">
-        <div style="margin-bottom:15px;">
-           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#0ea5a0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path></svg>
-           <style>.spin{animation:spin 1s linear infinite}@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}</style>
-        </div>
-        <h3 id="status-text" style="font-weight:600;">正在跳转...</h3>
-        <p style="color:#666;font-size:13px;margin-top:5px;">正在解析 sub-store 配置并构建连接，请稍候。</p>
-      </div>
-    `;
-
-    // 2. 启动超时控制 (10秒)
-    let isFinished = false;
-    const timeoutTimer = setTimeout(() => {
-      if (isFinished) return;
-      isFinished = true; // 标记超时
-      console.warn("SubStore跳转超时");
-      if (newWindow && !newWindow.closed) {
-        newWindow.document.body.innerHTML = `
-          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;">
-            <h3 style="color:#ff4d4f;">连接超时</h3>
-            <p style="color:#666;margin-bottom:20px;">获取 sub-store 配置耗时过长，请关闭重试。</p>
-            <button onclick="window.close()" style="padding:8px 20px;cursor:pointer;background:#fff;border:1px solid #ccc;border-radius:4px;">关闭窗口</button>
-          </div>
-        `;
-      }
-    }, 10000);
-
-    try {
-      let configData = _cachedSubStoreConfig;
-      if (!configData) {
-        // 如果超时了，就不要再更新文字了
-        if (!isFinished && newWindow && !newWindow.closed) {
-          const statusEl = newWindow.document.getElementById('status-text');
-          els.statusEl.innerHTML = `${STATUS_SPINNER}<span>正在获取 sub-store 配置...</span>`;
-        }
-
-        configData = await fetchSubStoreConfig();
-
-        // 获取数据后，必须再次检查是否已超时
-        if (isFinished) return;
-
-        _cachedSubStoreConfig = configData;
-      }
-
-      const result = buildSubStoreUrl(configData);
-      lastSubStorePath = result.subStorePath;
-
-      // 先清理定时器并标记结束，再执行跳转
-      if (isFinished) return;
-      isFinished = true;
-      clearTimeout(timeoutTimer);
-
-      newWindow.location.href = result.url;
-
-    } catch (err) {
-      console.error(err);
-
-      // 如果已经超时处理过了，就不再处理错误
-      if (isFinished) return;
-      isFinished = true;
-      clearTimeout(timeoutTimer);
-
-      // 优先在窗口内显示错误，不要急着 close()
-      if (newWindow && !newWindow.closed) {
-        newWindow.document.title = "错误";
-        newWindow.document.body.innerHTML = `
-          <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;padding:20px;text-align:center;">
-            <h3 style="color:#ff4d4f;margin-bottom:10px;">发生错误</h3>
-            <p style="color:#333;background:#ffebeb;padding:10px;border-radius:5px;font-family:monospace;">${err.message || '未知错误'}</p>
-            <p style="color:#999;font-size:12px;margin-top:10px;">请检查网络或后端日志</p>
-            <button onclick="window.close()" style="margin-top:20px;padding:8px 20px;cursor:pointer;border:1px solid #d9d9d9;background:#fff;border-radius:4px;">关闭</button>
-          </div>
-        `;
-      } else {
-        // 只有窗口意外关闭了，才用 Toast
-        showToast(err.message || '打开失败', 'error');
-      }
-    }
-  }
-
-  /**
-   * 获取分享链接的 Base URL
-   * @param {string} path 路径
-   * @param {string|number} port 端口号
-   * @returns {Promise<string>} 可用的 Base URL
-   */
-  async function getBaseUrl(path, port) {
-    const protocol = window.location.protocol;
-    const hostname = window.location.hostname;
-    const baseUrlWithoutPort = `${protocol}//${hostname}`;
-
-    const currentPort = window.location.port;
-    const shouldAddPort = !!currentPort;
-    const portToAdd = (shouldAddPort && port) ? `:${port}` : '';
-
-    let sub_store_hostname = hostname;
-    if (!shouldAddPort) {
-      const parts = hostname.split(".");
-      if (parts.length === 2) {
-        sub_store_hostname = `sub_store_for_subs_check.${hostname}`;
-      } else if (parts.length > 2) {
-        sub_store_hostname = `sub_store_for_subs_check.${parts.slice(1).join(".")}`;
-      }
-    }
-
-    const baseUrl = `${baseUrlWithoutPort}${portToAdd}${path}`;
-    const fallbackUrl = `${protocol}//${sub_store_hostname}${portToAdd}${path}`;
-
-    try {
-      const res = await fetch(baseUrl, { method: "HEAD" }).catch(() => null);
-      return res && res.ok ? baseUrl : fallbackUrl;
-    } catch {
-      return fallbackUrl;
-    }
+  function buildShareUrl(filename) {
+    return `${window.location.origin}/sub/${filename}`;
   }
 
   // ==================== 配置编辑器 ====================
@@ -1725,7 +1522,6 @@
       });
       if (r.ok) {
         showToast(r.payload?.message || '保存成功', 'success');
-        _cachedSubStoreConfig = null;
         cachedConfigPayload = null; // 清除分享配置缓存
       } else {
         showToast('保存失败: ' + (r.payload?.error || '未知错误'), 'error');
@@ -1782,11 +1578,6 @@
 
   function bindControls() {
     els.loginBtn?.addEventListener('click', onLoginBtnClick);
-    els.subStoreBtn = document.getElementById('sub-store');
-    els.subStoreBtnMobile = document.getElementById('btnSubStore');
-    els.subStoreBtn?.addEventListener('click', handleOpenSubStore);
-    els.subStoreBtnMobile?.addEventListener('click', handleOpenSubStore);
-
     els.toggleBtn?.addEventListener('click', async () => {
       if (!sessionKey || actionInFlight) return;
       actionInFlight = true;
@@ -1932,71 +1723,15 @@
 
         if (!sessionKey) { showLogin(true); return; }
 
-        try {
-          // 1. 检查配置缓存
-          if (!cachedConfigPayload) {
-            const r = await sfetch(API.config);
-            if (!r.ok) return showToast('读取配置失败', 'warn');
-            cachedConfigPayload = r.payload;
-          }
+        document.getElementById("commonSub-item")?.setAttribute("data-link", buildShareUrl("all.yaml"));
+        document.getElementById("historySub-item")?.setAttribute("data-link", buildShareUrl("history.yaml"));
 
-          // 2. 检查版本缓存
-          if (!cachedSingboxVersions) {
-            const v = await sfetch(API.singboxVersions);
-            if (!v.ok) return showToast('读取singbox版本', 'warn');
-            cachedSingboxVersions = v.payload;
-          }
-
-          // 3. 数据准备
-          const p = cachedConfigPayload;
-          const d = cachedSingboxVersions;
-          const config = YAML.parse(p?.content ?? "");
-
-          let subStorePath = p?.sub_store_path ?? '';
-          const SubStorePathYaml = config["sub-store-path"] ?? "";
-          if (!subStorePath) return showToast('请先设置 sub_store_path', 'error');
-          if (!SubStorePathYaml || SubStorePathYaml == '') showToast("您未设置sub-store-path，当前使用随机值。请尽快设置！", "warn");
-
-          const port = (config["sub-store-port"] ?? "").toString().trim().replace(/^:/, "");
-          let path = subStorePath.startsWith("/") ? subStorePath : `/${subStorePath}`;
-
-          const latestSingboxName = `singbox-${d.latest}`;
-          const oldSingboxName = `singbox-${d.old}`;
-
-          // 4. 使用 getBaseUrl 获取正确地址
-          const baseUrl = await getBaseUrl(path, port);
-
-          // 5. 更新 DOM
-          const setLink = (eid, suffix) => {
-            const el = document.getElementById(eid);
-            if (el) el.dataset.link = `${baseUrl}${suffix}`;
-          };
-
-          setLink("commonSub-item", "/download/sub");
-          setLink("mihomoSub-item", "/api/file/mihomo");
-
-          const oldItem = document.getElementById("singboxOldSub-item");
-          oldItem.textContent = `${oldSingboxName} 订阅`;
-          oldItem.dataset.link = `${baseUrl}/api/file/${oldSingboxName}`;
-
-          const newItem = document.getElementById("singboxLatestSub-item");
-          newItem.textContent = `${latestSingboxName} 订阅`;
-          newItem.title = `ios设备当前最高兼容 1.11 版本, 当前为 ${latestSingboxName}`;
-          newItem.dataset.link = `${baseUrl}/api/file/${latestSingboxName}`;
-
-          // 6. 显示菜单
-          const rect = btn.getBoundingClientRect();
-          const isMobile = window.innerWidth < 768;
-          menu.style.top = `${rect.top}px`;
-          menu.style.left = isMobile ? `${rect.left - 160}px` : `${rect.right * 0.9}px`;
-          menu.style.transform = "none";
-          menu.classList.add('active');
-        } catch (err) {
-          console.error(err);
-          showToast('获取链接失败', 'error');
-          cachedConfigPayload = null;
-          cachedSingboxVersions = null;
-        }
+        const rect = btn.getBoundingClientRect();
+        const isMobile = window.innerWidth < 768;
+        menu.style.top = `${rect.top}px`;
+        menu.style.left = isMobile ? `${rect.left - 160}px` : `${rect.right * 0.9}px`;
+        menu.style.transform = "none";
+        menu.classList.add('active');
       });
     };
     setupShare("share");

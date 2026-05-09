@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync/atomic"
@@ -18,7 +17,6 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/robfig/cron/v3"
 	"github.com/sinspired/subs-check/app/monitor"
-	"github.com/sinspired/subs-check/assets"
 	"github.com/sinspired/subs-check/check"
 	"github.com/sinspired/subs-check/config"
 	"github.com/sinspired/subs-check/save"
@@ -99,31 +97,8 @@ func (app *App) Initialize() error {
 		}
 	}
 
-	if config.GlobalConfig.SubStorePort != "" {
-		if runtime.GOOS == "linux" && runtime.GOARCH == "386" {
-			slog.Warn("node不支持Linux 32位系统，不启动sub-store服务")
-		} else {
-			// 使用 app.ctx 启动 sub-store，让其可被取消
-			go assets.RunSubStoreService(app.ctx)
-			// 短暂等待，保证 sub-store 启动日志按预期顺序输出
-			time.Sleep(500 * time.Millisecond)
-		}
-	}
-
 	// 启动内存监控
 	monitor.StartMemoryMonitor()
-
-	// 注册退出前清理逻辑（兜底）
-	utils.BeforeExitHook = func() {
-		NodeAlive, err := assets.FindNode()
-		if err == nil && NodeAlive {
-			slog.Warn("强制退出前，尝试清理 node 子进程")
-			if err := assets.KillNode(); err != nil {
-				slog.Error("强制清理 node 失败", "err", err)
-			}
-			slog.Warn("程序未正常退出，强制停止")
-		}
-	}
 
 	// 注册 ShutdownHook（第二次 Ctrl+C 立即调用）
 	utils.ShutdownHook = func() {
@@ -139,25 +114,6 @@ func (app *App) Initialize() error {
 
 	// 设置信号处理器
 	app.stopCh = utils.SetupSignalHandler(&check.ForceClose, &app.checking)
-
-	// 每周日 0 点自动更新 GeoLite2 数据库
-	weeklyCron := cron.New()
-	_, err := weeklyCron.AddFunc("0 12 * * 5", func() {
-		if !app.checking.Load() {
-			slog.Info("更新 GeoLite2 数据库...")
-			if err := assets.UpdateGeoLite2DB(); err != nil {
-				slog.Error(fmt.Sprintf("更新 GeoLite2 数据库失败: %v", err))
-			}
-		}
-	})
-	if err != nil {
-		slog.Error(fmt.Sprintf("注册 GeoLite2 数据库更新任务失败: %v", err))
-	} else {
-		weeklyCron.Start()
-	}
-
-	// 检查版本更新
-	app.SetupUpdateTasks()
 
 	return nil
 }
@@ -313,7 +269,6 @@ func (app *App) checkProxies() error {
 
 	slog.Info("检测完成")
 	save.SaveConfig(results)
-	utils.SendNotifyCheckResult(len(results))
 	utils.UpdateSubs()
 
 	// 执行回调脚本
@@ -341,7 +296,7 @@ func (app *App) Shutdown() error {
 
 	var lastErr error
 
-	// 取消上下文，通知各子服务退出（sub-store 等）
+	// 取消上下文，通知后台任务退出。
 	if app.cancel != nil {
 		app.cancel()
 	}
@@ -379,7 +334,7 @@ func (app *App) Shutdown() error {
 		close(app.done)
 	}
 
-	// 等待短时间，给子 goroutine 清理时间（作为最小可行方案）
+	// 等待短时间，给后台 goroutine 清理时间。
 	time.Sleep(500 * time.Millisecond)
 
 	slog.Info("应用已关闭")
@@ -410,87 +365,4 @@ func isDocker() bool {
 	}
 
 	return false
-}
-
-// SetupUpdateTasks 自动判断运行环境和配置，自动检查更新并创建定时任务
-func (app *App) SetupUpdateTasks() {
-	enableSelfUpdate := config.GlobalConfig.EnableSelfUpdate
-	updateOnStartup := config.GlobalConfig.UpdateOnStartup
-	cronCheckUpdate := config.GlobalConfig.CronCheckUpdate
-
-	StartFromGUI := os.Getenv("START_FROM_GUI") != ""
-	isDocker := isDocker()
-
-	if isDocker {
-		slog.Info("检测到运行在 Docker 容器中,不执行自动更新")
-	}
-
-	// 程序启动时更新
-	if !StartFromGUI && enableSelfUpdate && updateOnStartup && !isDocker {
-		updateDone := make(chan struct{})
-		go func() {
-			app.CheckUpdateAndRestart(false) // 启动时使用 false
-			close(updateDone)
-		}()
-		<-updateDone
-	} else {
-		detectDone := make(chan struct{})
-		go func() {
-			_, _, err := app.detectLatestRelease()
-			if err != nil {
-				slog.Warn("检查更新错误", "error", err)
-			}
-			close(detectDone)
-		}()
-		<-detectDone
-	}
-
-	// 设置定时更新任务
-	updateCron := cron.New()
-	schedule := cronCheckUpdate
-	if schedule == "" {
-		// 默认每周五 12 点
-		schedule = "0 12 * * 5"
-	}
-
-	if config.GlobalConfig.EnableCronCheck {
-		if enableSelfUpdate {
-			slog.Debug("程序将定时更新并重启", "schedule", schedule)
-		} else {
-			slog.Debug("程序将定时检查新版本(不自动更新)", "schedule", schedule)
-		}
-	} else {
-		slog.Debug("程序未启用定时检查更新任务")
-		return
-	}
-
-	_, err := updateCron.AddFunc(schedule, func() {
-		if !app.checking.Load() && config.GlobalConfig.EnableCronCheck {
-			if !StartFromGUI && enableSelfUpdate && !isDocker {
-				slog.Debug("定时检查版本更新并自动升级...")
-				updateDone := make(chan struct{})
-				go func() {
-					app.CheckUpdateAndRestart(true) // 定时任务使用 true
-					close(updateDone)
-				}()
-				<-updateDone
-			} else {
-				slog.Debug("定时检查新版本...")
-				detectDone := make(chan struct{})
-				go func() {
-					_, _, err := app.detectLatestRelease()
-					if err != nil {
-						slog.Warn("检查更新错误", "error", err)
-					}
-					close(detectDone)
-				}()
-				<-detectDone
-			}
-		}
-	})
-	if err != nil {
-		slog.Error(fmt.Sprintf("注册 定时检查版本更新 定时任务失败: %v", err))
-	} else {
-		updateCron.Start()
-	}
 }

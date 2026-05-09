@@ -22,11 +22,6 @@ import { highlightSelectionMatches } from "@codemirror/search"; // 选择高亮
 const configCompletions = [
   { label: "print-progress", type: "property", detail: "是否显示检测进度（终端）", section: "进度条", isArray: false },
   { label: "progress-mode", type: "property", detail: "进度条显示模式", section: "进度条", isArray: false },
-  { label: "update", type: "property", detail: "是否开启新版本更新", section: "版本更新", isArray: false },
-  { label: "update-on-startup", type: "property", detail: "启动时检查更新", section: "版本更新", isArray: false },
-  { label: "cron-check-update", type: "property", detail: "定时检查更新", section: "版本更新", isArray: false },
-  { label: "prerelease", type: "property", detail: "使用预发布版本", section: "版本更新", isArray: false },
-  { label: "update-timeout", type: "property", detail: "下载新版本超时(分钟)", section: "版本更新", isArray: false },
   { label: "concurrent", type: "property", detail: "并发线程数", section: "检测参数", isArray: false },
   { label: "alive-concurrent", type: "property", detail: "测活并发数，建议：10-1000", section: "检测参数", isArray: false },
   { label: "speed-concurrent", type: "property", detail: "测速并发数，建议：4-32", section: "检测参数", isArray: false },
@@ -55,34 +50,7 @@ const configCompletions = [
   { label: "listen-port", type: "property", detail: "WebUI端口", section: "Web UI", isArray: false },
   { label: "enable-web-ui", type: "property", detail: "是否启用Web控制面板", section: "Web UI", isArray: false },
   { label: "api-key", type: "property", detail: "Web控制面板的api-key", section: "Web UI", isArray: false },
-  { label: "share-password", type: "property", detail: "分享码", section: "Web UI", isArray: false },
   { label: "callback-script", type: "property", detail: "回调脚本路径", section: "回调脚本", isArray: false },
-  { label: "apprise-api-server", type: "property", detail: "apprise API server 地址", section: "通知设置", isArray: false, info: "示例: https://notify.xxxx.us.kg/notify" },
-  { label: "recipient-url", type: "property", detail: "apprise 通知目标", section: "通知设置", isArray: true, info: "详细格式请参照 https://github.com/caronc/apprise" },
-  { label: "notify-title", type: "property", detail: "自定义通知标题", section: "通知设置", isArray: false, info: "默认标题: 🔔 节点状态更新" },
-  { label: "sub-store-port", type: "property", detail: "sub-store 端口", section: "sub-store", isArray: false },
-  { label: "sub-store-path", type: "property", detail: "sub-store 自定义路径", section: "sub-store", isArray: false },
-  { label: "mihomo-overwrite-url", type: "property", detail: "mihomo 覆写订阅地址", section: "sub-store", isArray: false },
-  { label: "singbox-latest", type: "property", detail: "singbox latest 版本配置", section: "singbox规则", isArray: false },
-  { label: "singbox-old", type: "property", detail: "singbox 1.11 版本配置（iOS 兼容）", section: "singbox规则", isArray: false },
-  { label: "sub-store-sync-cron", type: "property", detail: "sub-store同步gist定时任务", section: "sub-store定时", isArray: false },
-  { label: "sub-store-produce-cron", type: "property", detail: "定时更新订阅", section: "sub-store定时", isArray: false },
-  { label: "sub-store-push-service", type: "property", detail: "sub-store推送服务地址", section: "sub-store定时", isArray: false, info: "例如：Brak: \'SUB_STORE_PUSH_SERVICE=https://api.day.app/XXXXXXXXXXXX/[推送标题]/[推送内容]\'" },
-  { label: "save-method", type: "property", detail: "保存方法", section: "保存方法", isArray: false, info: "目前支持的保存方法: r2, local, gist, webdav, s3" },
-  { label: "webdav-url", type: "property", detail: "webdav 地址", section: "webdav", isArray: false },
-  { label: "webdav-username", type: "property", detail: "webdav 用户名", section: "webdav", isArray: false },
-  { label: "webdav-password", type: "property", detail: "webdav 密码", section: "webdav", isArray: false },
-  { label: "github-gist-id", type: "property", detail: "gist id", section: "gist", isArray: false },
-  { label: "github-token", type: "property", detail: "github token", section: "gist", isArray: false },
-  { label: "github-api-mirror", type: "property", detail: "github api mirror", section: "gist", isArray: false },
-  { label: "worker-url", type: "property", detail: "将测速结果推送到Worker的地址", section: "Worker", isArray: false },
-  { label: "worker-token", type: "property", detail: "Worker令牌", section: "Worker", isArray: false },
-  { label: "s3-endpoint", type: "property", detail: "将测速结果推送到S3/Minio的地址", section: "S3", isArray: false },
-  { label: "s3-access-id", type: "property", detail: "S3的访问凭证 ID", section: "S3", isArray: false },
-  { label: "s3-secret-key", type: "property", detail: "S3的访问凭证 Key", section: "S3", isArray: false },
-  { label: "s3-bucket", type: "property", detail: "S3的Bucket名称", section: "S3", isArray: false },
-  { label: "s3-use-ssl", type: "property", detail: "是否使用SSL", section: "S3", isArray: false },
-  { label: "s3-bucket-lookup", type: "property", detail: "默认自动判断dns还是path", section: "S3", isArray: false, info: "可选值：auto, path, dns" },
   { label: "system-proxy", type: "property", detail: "系统代理设置", section: "代理设置", isArray: false, info: "即使未设置,也会检测常见端口(v2ray\\clash)的系统代理自动设置" },
   { label: "github-proxy", type: "property", detail: "Github 代理", section: "代理设置", isArray: false, info: "获取订阅、添加覆写地址时使用" },
   { label: "ghproxy-group", type: "property", detail: "GitHub 代理列表", section: "代理设置", isArray: true, info: "程序会自动筛选可用的 GitHub 代理" },
@@ -102,18 +70,6 @@ const valueCompletions = {
   "print-progress": [
     { label: "true", detail: "显示进度条" },
     { label: "false", detail: "不显示（默认）" }
-  ],
-  "update": [
-    { label: "true", detail: "自动更新（默认）" },
-    { label: "false", detail: "不更新（会提醒新版本）" }
-  ],
-  "update-on-startup": [
-    { label: "true", detail: "启动时检查更新（默认）" },
-    { label: "false", detail: "不检查" }
-  ],
-  "prerelease": [
-    { label: "true", detail: "使用预发布版本" },
-    { label: "false", detail: "使用稳定版本（默认）" }
   ],
   "rename-node": [
     { label: "true", detail: "启用节点重命名（默认）" },
@@ -143,48 +99,19 @@ const valueCompletions = {
     { label: "true", detail: "启用 Web 控制面板（默认）" },
     { label: "false", detail: "禁用" }
   ],
-  "s3-use-ssl": [
-    { label: "true", detail: "使用 SSL" },
-    { label: "false", detail: "不使用 SSL（默认）" }
-  ],
 
   // 枚举 / 模式类
   "progress-mode": [
     { label: "auto", detail: "根据测活-测速-媒体检测的阶段权重自动显示（默认）" },
     { label: "stage", detail: "每个阶段完成,显示下一阶段剩余任务" }
   ],
-  "s3-bucket-lookup": [
-    { label: "auto", detail: "自动判断 dns 还是 path（默认）" },
-    { label: "path", detail: "使用 path 风格" },
-    { label: "dns", detail: "使用 dns 风格" }
-  ],
-  "save-method": [
-    { label: "local", detail: "本地保存（默认）" },
-    { label: "r2", detail: "R2 云存储" },
-    { label: "gist", detail: "GitHub Gist" },
-    { label: "webdav", detail: "WebDAV" },
-    { label: "s3", detail: "S3/Minio" }
-  ],
 
   // cron 表达式示例（作为字符串选项）
-  "cron-check-update": [
-    { label: "\"0 0,9,21 * * *\"", detail: "默认每天0点,9点,21点检查更新" },
-    { label: "\"*/30 * * * *\"", detail: "每30分钟检查" },
-    { label: "\"0 */6 * * *\"", detail: "每6小时检查" }
-  ],
   "cron-expression": [
     { label: "\"0 */12 * * *\"", detail: "每12小时的整点执行" },
     { label: "\"0 0 */2 * *\"", detail: "每2天的0点执行" },
     { label: "\"0 0 1 * *\"", detail: "每月1日0点执行" },
     { label: "\"* 4,16 * * *\"", detail: "每天4点、16点执行" }
-  ],
-  "sub-store-sync-cron": [
-    { label: "\"55 23 * * *\"", detail: "每天 23 点 55 分(避开部分机场后端每天0点定时重启)" },
-    { label: "\"0 0 * * *\"", detail: "每天 0 点执行" }
-  ],
-  "sub-store-produce-cron": [
-    { label: "\"0 */2 * * *\"", detail: "每 2 小时处理一次" },
-    { label: "\"0 */3 * * *\"", detail: "每 3 小时处理一次" }
   ],
 
   // system-proxy 示例
@@ -201,10 +128,6 @@ const valueCompletions = {
     { label: "\"https://ghproxy.com/\"", detail: "GHProxy 代理" }
   ],
 
-  // notify-title 示例
-  "notify-title": [
-    { label: "\"🔔 节点状态更新\"", detail: "默认通知标题" }
-  ]
 };
 
 // 数组项补全（用于 platforms 等，当输入 - 时补全子项）
@@ -225,13 +148,6 @@ const arrayItemCompletions = {
     { label: "vless", detail: "VLESS 协议" },
     { label: "trojan", detail: "Trojan 协议" },
     { label: "shadowsocks", detail: "Shadowsocks 协议" },
-  ],
-  "recipient-url": [
-    { label: "bark://api.day.app/xxxxxxxxxxxxxxx", detail: "Bark(iOS) 通知格式：bark://api.day.app/{device_key}" },
-    { label: "ntfy://mytopic", detail: "Ntfy ntfy://{topic}" },
-    { label: "tgram://xxxxxx/-1002149239223", detail: "Telegram 通知格式：tgram://{bot_token}/{chat_id}" },
-    { label: "dingtalk://xxxxxx@xxxxxxx", detail: "钉钉通知格式：dingtalk://{Secret}@{ApiKey}" },
-    { label: "mailto://xxxxx:xxxxxx@qq.com", detail: "QQ邮箱：mailto://QQ号:邮箱授权码@qq.com" }
   ],
   "ghproxy-group": [
     { label: "https://ghproxy.net/", detail: "GHProxy 代理 1" },
@@ -469,7 +385,7 @@ const placeholderMatcher = new MatchDecorator({
   regexp: new RegExp(
     [
       // 匹配所有 configCompletions 中的 label
-      '(?<=^[ \t]*)(print-progress|progress-mode|update|update-on-startup|cron-check-update|prerelease|update-timeout|concurrent|alive-concurrent|speed-concurrent|media-concurrent|check-interval|cron-expression|success-limit|timeout|speed-test-url|min-speed|download-timeout|download-mb|total-speed-limit|threshold|rename-node|node-prefix|node-type|isp-check|media-check|platforms|drop-bad-cf-nodes|enhanced-tag|maxmind-db-path|output-dir|keep-success-proxies|listen-port|enable-web-ui|api-key|share-password|callback-script|apprise-api-server|recipient-url|notify-title|sub-store-port|sub-store-path|mihomo-overwrite-url|singbox-latest|singbox-old|sub-store-sync-cron|sub-store-produce-cron|sub-store-push-service|save-method|webdav-url|webdav-username|webdav-password|github-gist-id|github-token|github-api-mirror|worker-url|worker-token|s3-endpoint|s3-access-id|s3-secret-key|s3-bucket|s3-use-ssl|s3-bucket-lookup|system-proxy|github-proxy|ghproxy-group|sub-urls-retry|sub-urls-timeout|sub-urls-stats|success-rate|sub-urls-remote|sub-urls)(?=\s*:\s*)',
+      '(?<=^[ \t]*)(print-progress|progress-mode|concurrent|alive-concurrent|speed-concurrent|media-concurrent|check-interval|cron-expression|success-limit|timeout|speed-test-url|min-speed|download-timeout|download-mb|total-speed-limit|threshold|rename-node|node-prefix|node-type|isp-check|media-check|platforms|drop-bad-cf-nodes|enhanced-tag|maxmind-db-path|output-dir|keep-success-proxies|listen-port|enable-web-ui|api-key|callback-script|system-proxy|github-proxy|ghproxy-group|sub-urls-retry|sub-urls-timeout|sub-urls-stats|success-rate|sub-urls-remote|sub-urls)(?=\s*:\s*)',
 
       // 列表项：- openai / - "openai"
       '(?<=^[ \\t]*-\\s*["\']?)(openai|iprisk|gemini|tiktok|youtube|disney|netflix|x|ss|trojan|vless|vmess|shadowsocks)(?=["\']?\\b)',

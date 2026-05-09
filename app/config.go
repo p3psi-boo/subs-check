@@ -1,19 +1,16 @@
 package app
 
 import (
-	"context"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
-	"github.com/sinspired/subs-check/assets"
+	"github.com/goccy/go-yaml"
 	"github.com/sinspired/subs-check/config"
 	"github.com/sinspired/subs-check/utils"
-	 "github.com/goccy/go-yaml" 
 )
 
 // initConfigPath 初始化配置文件路径
@@ -57,64 +54,7 @@ func (app *App) loadConfig() error {
 func (app *App) createDefaultConfig() error {
 	slog.Info("配置文件不存在，创建默认配置文件")
 
-	tpl := string(config.DefaultConfigTemplate)
-
-	// 定位未被注释的 sub-store-path 键并设置默认值
-	lines := strings.Split(tpl, "\n")
-	found := false
-	for i, line := range lines {
-		// 跳过整行注释
-		ltrim := strings.TrimLeft(line, " \t")
-		if ltrim == "" || strings.HasPrefix(ltrim, "#") {
-			continue
-		}
-		if strings.HasPrefix(ltrim, "sub-store-path:") {
-			found = true
-			// 保留原有缩进与冒号后的空白
-			indent := line[:len(line)-len(ltrim)]
-			colonIdx := strings.Index(ltrim, ":")
-			after := ltrim[colonIdx+1:] // 含原有空白与值
-			afterTrimLeft := strings.TrimLeft(after, " \t")
-			afterSpaces := after[:len(after)-len(afterTrimLeft)]
-			raw := strings.TrimSpace(after)
-
-			// 根据原逻辑判定是否需要生成随机路径
-			needRandom := false
-			if raw == "" || strings.HasPrefix(raw, "#") || raw == "\"\"" || raw == "''" {
-				needRandom = true
-			}
-
-			val := strings.Trim(raw, "'\"")
-			if val == "/" {
-				needRandom = true
-			}
-
-			if needRandom {
-				val = "/" + utils.GenerateRandomString(20)
-			} else {
-				if !strings.HasPrefix(val, "/") {
-					val = "/" + val
-				}
-			}
-
-			lines[i] = indent + "sub-store-path:" + afterSpaces + "\"" + val + "\""
-			slog.Info("已设置 sub-store-path", "path", val)
-			break
-		}
-	}
-
-	if !found {
-		// 模板中没有该键，追加在文件末尾
-		if !strings.HasSuffix(tpl, "\n") {
-			tpl += "\n"
-		}
-		tpl += fmt.Sprintf("sub-store-path: \"/%s\"\n", utils.GenerateRandomString(20))
-		lines = strings.Split(tpl, "\n")
-	}
-
-	tpl = strings.Join(lines, "\n")
-
-	if err := os.WriteFile(app.configPath, []byte(tpl), 0644); err != nil {
+	if err := os.WriteFile(app.configPath, config.DefaultConfigTemplate, 0644); err != nil {
 		return fmt.Errorf("写入默认配置文件失败: %w", err)
 	}
 
@@ -158,10 +98,6 @@ func (app *App) initConfigWatcher() error {
 						oldCronExpr := config.GlobalConfig.CronExpression
 						oldInterval := app.interval
 
-						oldUpdateSwitcher := config.GlobalConfig.EnableSelfUpdate
-						oldCronCheckUpdateExpr := config.GlobalConfig.CronCheckUpdate
-						oldSubStorePath := config.GlobalConfig.SubStorePath
-
 						if err := app.loadConfig(); err != nil {
 							slog.Error(fmt.Sprintf("重新加载配置文件失败: %v", err))
 							return
@@ -181,48 +117,6 @@ func (app *App) initConfigWatcher() error {
 							}
 						}
 
-						// 去掉开头斜杠以进行比对
-						oldSubStorePath = strings.TrimPrefix(oldSubStorePath, "/")
-						config.GlobalConfig.SubStorePath = strings.TrimPrefix(config.GlobalConfig.SubStorePath, "/")
-
-						// 如果sub-store路径变化，重启sub-store服务
-						if config.GlobalConfig.SubStorePath == "" {
-							if subStorePath := os.Getenv("SUB_STORE_PATH"); subStorePath != "" {
-								if subStorePath != oldSubStorePath {
-									slog.Info("从环境变量获取sub-store路径", "sub-store-path", subStorePath)
-									config.GlobalConfig.SubStorePath = subStorePath
-									// 重启sub-store服务
-									if app.cancel != nil {
-										app.cancel()
-										app.ctx, app.cancel = context.WithCancel(context.Background())
-									}
-									assets.RunSubStoreService(app.ctx)
-								}
-							} else {
-								if assets.InitSubStorePath != "" {
-									slog.Warn("sub-store路径发生变化，正在重启sub-store服务")
-									config.GlobalConfig.SubStorePath = utils.GenerateRandomString(20)
-									slog.Info("已随机生成", "sub-store-path", config.GlobalConfig.SubStorePath)
-
-									if app.cancel != nil {
-										app.cancel()
-										app.ctx, app.cancel = context.WithCancel(context.Background())
-									}
-									assets.RunSubStoreService(app.ctx)
-								} else {
-									config.GlobalConfig.SubStorePath = oldSubStorePath
-									slog.Debug("保留首次运行自动生成的sub-store路径", "sub-store-path", config.GlobalConfig.SubStorePath)
-								}
-							}
-						} else if oldSubStorePath != config.GlobalConfig.SubStorePath {
-							slog.Warn("sub-store路径发生变化，正在重启sub-store服务")
-							if app.cancel != nil {
-								app.cancel()
-								app.ctx, app.cancel = context.WithCancel(context.Background())
-							}
-							assets.RunSubStoreService(app.ctx)
-						}
-
 						// 检查cron表达式或检测间隔是否变化
 						if oldCronExpr != config.GlobalConfig.CronExpression ||
 							oldInterval != config.GlobalConfig.CheckInterval {
@@ -237,11 +131,6 @@ func (app *App) initConfigWatcher() error {
 
 							// 使用setTimer方法重新设置定时器
 							app.setTimer()
-						}
-
-						if oldCronCheckUpdateExpr != config.GlobalConfig.CronCheckUpdate || oldUpdateSwitcher != config.GlobalConfig.EnableSelfUpdate {
-							slog.Warn("版本更新设置发生变化，重新设置定时更新任务")
-							app.SetupUpdateTasks()
 						}
 					})
 				}

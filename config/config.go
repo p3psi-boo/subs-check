@@ -5,12 +5,6 @@ import (
 	_ "embed"
 )
 
-type SingBoxConfig struct {
-	Version string   `yaml:"version"`
-	JSON    []string `yaml:"json"`
-	JS      []string `yaml:"js"`
-}
-
 type Config struct {
 	PrintProgress        bool     `yaml:"print-progress"`
 	ProgressMode         string   `yaml:"progress-mode"`
@@ -28,21 +22,6 @@ type Config struct {
 	MinSpeed             int      `yaml:"min-speed"`
 	Timeout              int      `yaml:"timeout"`
 	FilterRegex          string   `yaml:"filter-regex"`
-	SaveMethod           string   `yaml:"save-method"`
-	WebDAVURL            string   `yaml:"webdav-url"`
-	WebDAVUsername       string   `yaml:"webdav-username"`
-	WebDAVPassword       string   `yaml:"webdav-password"`
-	GithubToken          string   `yaml:"github-token"`
-	GithubGistID         string   `yaml:"github-gist-id"`
-	GithubAPIMirror      string   `yaml:"github-api-mirror"`
-	WorkerURL            string   `yaml:"worker-url"`
-	WorkerToken          string   `yaml:"worker-token"`
-	S3Endpoint           string   `yaml:"s3-endpoint"`
-	S3AccessID           string   `yaml:"s3-access-id"`
-	S3SecretKey          string   `yaml:"s3-secret-key"`
-	S3Bucket             string   `yaml:"s3-bucket"`
-	S3UseSSL             bool     `yaml:"s3-use-ssl"`
-	S3BucketLookup       string   `yaml:"s3-bucket-lookup"`
 	SubUrlsReTry         int      `yaml:"sub-urls-retry"`
 	SubUrlsRetryInterval int      `yaml:"sub-urls-retry-interval"`
 	SubUrlsTimeout       int      `yaml:"sub-urls-timeout"`
@@ -56,15 +35,6 @@ type Config struct {
 	RenameNode           bool     `yaml:"rename-node"`
 	KeepSuccessProxies   bool     `yaml:"keep-success-proxies"`
 	OutputDir            string   `yaml:"output-dir"`
-	AppriseAPIServer     string   `yaml:"apprise-api-server"`
-	RecipientURL         []string `yaml:"recipient-url"`
-	NotifyTitle          string   `yaml:"notify-title"`
-	SubStorePort         string   `yaml:"sub-store-port"`
-	SubStorePath         string   `yaml:"sub-store-path"`
-	SubStoreSyncCron     string   `yaml:"sub-store-sync-cron"`
-	SubStorePushService  string   `yaml:"sub-store-push-service"`
-	SubStoreProduceCron  string   `yaml:"sub-store-produce-cron"`
-	MihomoOverwriteURL   string   `yaml:"mihomo-overwrite-url"`
 	ISPCheck             bool     `yaml:"isp-check"`
 	MediaCheck           bool     `yaml:"media-check"`
 	Platforms            []string `yaml:"platforms"`
@@ -76,28 +46,15 @@ type Config struct {
 	NodeType             []string `yaml:"node-type"`
 	EnableWebUI          bool     `yaml:"enable-web-ui"`
 	APIKey               string   `yaml:"api-key"`
-	SharePassword        string   `yaml:"share-password"`
 	CallbackScript       string   `yaml:"callback-script"`
 	SystemProxy          string   `yaml:"system-proxy"`
 	GithubProxy          string   `yaml:"github-proxy"`
 	GithubProxyGroup     []string `yaml:"ghproxy-group"`
-	EnableSelfUpdate     bool     `yaml:"update"`
-	EnableCronCheck      bool     `yaml:"enable-cron-check"`
-	UpdateOnStartup      bool     `yaml:"update-on-startup"`
-	CronCheckUpdate      string   `yaml:"cron-check-update"`
-	Prerelease           bool     `yaml:"prerelease"`
-	UpdateTimeout        int      `yaml:"update-timeout"`
-
-	// 新增 singbox的ios版本停留在1.11，这里进行兼容
-	SingboxLatest SingBoxConfig `yaml:"singbox-latest"`
-	SingboxOld    SingBoxConfig `yaml:"singbox-old"`
 }
 
 var OriginDefaultConfig = &Config{
 	// 新增配置，给未更改配置文件的用户一个默认值
-	ListenPort:         ":8199",
-	NotifyTitle:        "🔔 节点状态更新",
-	MihomoOverwriteURL: "http://127.0.0.1:8199/ACL4SSR_Online_Full.yaml",
+	ListenPort: ":8199",
 	Platforms: []string{
 		"iprisk",
 		"openai",
@@ -106,9 +63,7 @@ var OriginDefaultConfig = &Config{
 		// "netflix",
 		// "disney",
 	},
-	DownloadMB:       20,
-	EnableSelfUpdate: true,
-	CronCheckUpdate:  "0 0,9,21 * * *",
+	DownloadMB: 20,
 	// ISPCheck:    true,
 }
 

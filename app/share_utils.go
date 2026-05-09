@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sinspired/subs-check/config"
 )
 
 // SharePageData 定义渲染分享页面所需的数据
@@ -46,24 +45,24 @@ func (app *App) handleFileShare(basePath string, isSecret bool) gin.HandlerFunc 
 		if relPath == "" || relPath == "/" {
 			if isSecret {
 				renderSharePage(c, http.StatusOK, SharePageData{
-					Title:       "Subs-Check-PRO 文件分享（通过分享码）",
+					Title:       "Subs-Check 文件分享",
 					HeaderColor: "#009768", // 绿色
-					HeaderIcon:  "🔒",
+					HeaderIcon:  "",
 					HeaderTitle: "订阅分享",
-					Description: template.HTML("您正在通过 <code>share-password</code> 访问 <b>/output/</b>。"),
-					PathExample: fmt.Sprintf("/sub/%s/filename.txt", config.GlobalConfig.SharePassword),
-					ExtraHint:   template.HTML("🚨 <b>请勿</b>将本网址随意分享给他人！"),
-					FooterText:  "建议定期更换分享码。",
+					Description: template.HTML("您正在访问 <b>/output/</b> 下的订阅文件。"),
+					PathExample: "/sub/filename.txt",
+					ExtraHint:   template.HTML("请只分享确实需要公开的订阅文件。"),
+					FooterText:  "订阅分享未使用密码。",
 				})
 			} else {
 				renderSharePage(c, http.StatusOK, SharePageData{
 					Title:       "Subs-Check-PRO 文件分享",
 					HeaderColor: "#d9534f", // 红色
-					HeaderIcon:  "⚠️",
+					HeaderIcon:  "",
 					HeaderTitle: "注意",
 					Description: template.HTML("您正在访问 <b>无密码保护的目录</b>。"),
 					PathExample: "/more/filename.txt",
-					ExtraHint:   template.HTML("🚨 请勿在该目录存放敏感文件，以免资源泄露！"),
+					ExtraHint:   template.HTML("请勿在该目录存放敏感文件，以免资源泄露！"),
 					FooterText:  "除非文件确实没啥泄露价值。",
 				})
 			}
@@ -78,7 +77,7 @@ func (app *App) handleFileShare(basePath string, isSecret bool) gin.HandlerFunc 
 			renderSharePage(c, http.StatusForbidden, SharePageData{
 				Title:       "非法访问 - Subs-Check-PRO",
 				HeaderColor: "#d9534f", // 红色
-				HeaderIcon:  "🚫",
+				HeaderIcon:  "",
 				HeaderTitle: "访问被拒绝",
 				Description: template.HTML(fmt.Sprintf("检测到非法路径请求：<code>%s</code>", relPath)),
 				PathExample: "/",
@@ -94,14 +93,14 @@ func (app *App) handleFileShare(basePath string, isSecret bool) gin.HandlerFunc 
 			// 确定示例路径（方便用户点击回去）
 			examplePath := "/more/filename.txt"
 			if isSecret {
-				examplePath = fmt.Sprintf("/sub/%s/filename.txt", config.GlobalConfig.SharePassword)
+				examplePath = "/sub/filename.txt"
 			}
 
 			// 渲染 404 页面
 			renderSharePage(c, http.StatusNotFound, SharePageData{
 				Title:       "文件不存在 - Subs-Check-PRO",
-				HeaderColor: "#d40000ff", // 橙色，表示警告/错误
-				HeaderIcon:  "👻",       // 幽灵图标，表示这里空空如也
+				HeaderColor: "#d40000ff", // 表示警告/错误
+				HeaderIcon:  "",
 				HeaderTitle: "错误！",
 				Description: template.HTML(fmt.Sprintf("未找到文件 <code>%s</code>", relPath)),
 				PathExample: examplePath, // 显示正确的格式给用户参考
@@ -172,7 +171,7 @@ const sharePageTemplateStr = `
         <p>如需保留之前成功的代理节点，仅需开启 <code>keep-success-proxies: true</code></p>
         <br>
         <p>{{ .ExtraHint }}</p>
-        <p style="font-size: 0.9em; color: #999;">🚦 {{ .FooterText }}</p>
+        <p style="font-size: 0.9em; color: #999;">{{ .FooterText }}</p>
     </div>
 </body>
 </html>

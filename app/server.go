@@ -122,10 +122,8 @@ func (app *App) silentLoggerMiddleware() gin.HandlerFunc {
 func (app *App) registerStaticRoutes(router *gin.Engine, outputPath string) {
 	// 公共静态文件映射（无需鉴权）
 	publicFiles := map[string]string{
-		"/ACL4SSR_Online_Full.yaml":     "ACL4SSR_Online_Full.yaml",
-		"/bdg.yaml":                     "bdg.yaml",
-		"/sub/ACL4SSR_Online_Full.yaml": "ACL4SSR_Online_Full.yaml",
-		"/sub/bdg.yaml":                 "bdg.yaml",
+		"/ACL4SSR_Online_Full.yaml": "ACL4SSR_Online_Full.yaml",
+		"/bdg.yaml":                 "bdg.yaml",
 	}
 	for routePath, fileName := range publicFiles {
 		router.StaticFile(routePath, filepath.Join(outputPath, fileName))
@@ -147,12 +145,8 @@ func (app *App) registerStaticRoutes(router *gin.Engine, outputPath string) {
 
 // registerShareRoutes 注册分享路由
 func (app *App) registerShareRoutes(router *gin.Engine, outputPath string) error {
-	// 加密分享
-	if config.GlobalConfig.SharePassword != "" {
-		slog.Info("订阅分享 已启用", "code", config.GlobalConfig.SharePassword)
-		sharePath := "/sub/" + config.GlobalConfig.SharePassword + "/*filepath"
-		router.GET(sharePath, app.handleFileShare(outputPath, true))
-	}
+	slog.Info("订阅分享 已启用", "path", "/sub/*filepath")
+	router.GET("/sub/*filepath", app.handleFileShare(outputPath, true))
 
 	// 公开分享
 	moreDirPath := filepath.Join(outputPath, ShareDirName)
@@ -195,7 +189,6 @@ func (app *App) registerAPIRoutes(router *gin.Engine) {
 		api.POST("/trigger-check", app.triggerCheckHandler)
 		api.POST("/force-close", app.forceCloseHandler)
 		api.GET("/version", app.getVersion)
-		api.GET("/singbox-versions", app.getSingboxVersions)
 		api.GET("/logs", app.getLogs)
 	}
 }
@@ -240,8 +233,7 @@ func (app *App) getConfig(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"content":        string(configData),
-		"sub_store_path": config.GlobalConfig.SubStorePath,
+		"content": string(configData),
 	})
 }
 
@@ -284,14 +276,14 @@ func (app *App) getStatus(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"checking":   app.checking.Load(),
-		"proxyCount": check.ProxyCount.Load(),
-		"available":  check.Available.Load(),
-		"progress":   check.Progress.Load(),
-		"forceClose": check.ForceClose.Load(),
+		"checking":       app.checking.Load(),
+		"proxyCount":     check.ProxyCount.Load(),
+		"available":      check.Available.Load(),
+		"progress":       check.Progress.Load(),
+		"forceClose":     check.ForceClose.Load(),
 		"successlimited": check.Successlimited.Load(),
 		"processResults": check.ProcessResults.Load(),
-		"lastCheck":  lastCheck,
+		"lastCheck":      lastCheck,
 	})
 }
 
@@ -327,10 +319,6 @@ func (app *App) getVersion(c *gin.Context) {
 
 func (app *App) getOriginVersion(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"version": app.originVersion, "latest_version": app.latestVersion})
-}
-
-func (app *App) getSingboxVersions(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{"latest": utils.LatestSingboxVersion, "old": utils.OldSingboxVersion})
 }
 
 // ReadLastNLines 读取最新日志
