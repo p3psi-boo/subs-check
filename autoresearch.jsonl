@@ -1,0 +1,1 @@
+{"type":"config","name":"subs-check resource optimization via flamegraph analysis","metricName":"peak_rss_mb","metricUnit":"mb","bestDirection":"lower"}

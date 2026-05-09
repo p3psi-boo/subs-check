@@ -1,0 +1,62 @@
+# Benchmark config: realistic load, fast enough for iteration
+print-progress: true
+progress-mode: "auto"
+check-interval: 720
+
+alive-concurrent: 50
+speed-concurrent: 8
+media-concurrent: 20
+timeout: 5000
+concurrent: 50
+
+success-limit: 0
+keep-success-proxies: false
+
+min-speed: 128
+download-timeout: 10
+download-mb: 20
+total-speed-limit: 0
+speed-test-url: "https://speed.cloudflare.com/__down?bytes=104857600"
+
+threshold: 0.75
+
+listen-port: ""
+enable-web-ui: false
+api-key: ""
+
+media-check: true
+platforms:
+  - iprisk
+  - openai
+  - gemini
+  - youtube
+  - netflix
+  - disney
+  - x
+  - tiktok
+
+sub-urls:
+  - "https://ccccccccccccccccccccccccccccccccccccccccccc.cc/api/7bfb290bdb50155a2d2e05b5704d1d03"
+  - "https://dy11.baipiaoyes.com/api/v1/client/subscribe?token=b81cfbae83da5edb34e2ef02e79b36fe"
+  - "https://free.datiya.com/uploads/{Ymd}-clash.yaml"
+  - "https://node.freeclashnode.com/uploads/{Y}/{mm}/0-{Ymd}.yaml"
+  - "https://node.freeclashnode.com/uploads/{Y}/{mm}/1-{Ymd}.yaml"
+  - "https://node.freeclashnode.com/uploads/{Y}/{mm}/2-{Ymd}.yaml"
+  - "https://clashbest.github.io/uploads/{Y}/{mm}/0-{Ymd}.yaml"
+  - "https://clashbest.github.io/uploads/{Y}/{mm}/1-{Ymd}.yaml"
+  - "https://raw.githubusercontent.com/firefoxmmx2/v2rayshare_subcription/main/subscription/clash_sub.yaml"
+  - "https://raw.githubusercontent.com/xiaoji235/airport-free/main/clash/naidounode.txt"
+
+node-prefix: ""
+rename-node: true
+node-type: []
+
+enhanced-tag: false
+isp-check: true
+drop-bad-cf-nodes: true
+
+output-dir: "output"
+callback-script: ""
+
+sub-urls-stats: false
+success-rate: 0

@@ -285,9 +285,11 @@ func (app *App) checkProxies() error {
 	return nil
 }
 
-// TempLog 返回临时日志路径
+// TempLog 返回临时日志路径（使用项目内 ./tmp 目录）
 func TempLog() string {
-	return filepath.Join(os.TempDir(), "subs-check.log")
+	tmpDir := "tmp"
+	_ = os.MkdirAll(tmpDir, 0755) // 确保目录存在，忽略错误
+	return filepath.Join(tmpDir, "subs-check.log")
 }
 
 // Shutdown 尝试优雅关闭所有子服务与资源

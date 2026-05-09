@@ -7,6 +7,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"strings"
 
 	"github.com/lmittmann/tint"
@@ -21,6 +22,10 @@ var CurrentCommit = "unknown"
 var TempLog string
 
 func init() {
+	// 启用 block 和 mutex profiling，便于收集火焰图
+	runtime.SetBlockProfileRate(1)
+	runtime.SetMutexProfileFraction(1)
+
 	// 设置依赖库日志级别
 	if os.Getenv("MIHOMO_DEBUG") != "" {
 		mihomoLog.SetLevel(mihomoLog.DEBUG)

@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"runtime/debug"
 	"sort"
 	"strconv"
@@ -216,7 +217,9 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	close(proxyChan)
 	<-done
 
-	// 归还内存
+	// 归还内存：先触发 GC 回收 YAML 解析产生的临时对象，再归还 OS 内存
+	// 火焰图显示 YAML 解析占 76% 的累计分配（~750MB/60s）
+	runtime.GC()
 	debug.FreeOSMemory()
 
 	// 将 Map 转为 Slice，并统计最终的分类数量
@@ -313,6 +316,11 @@ func processSubscription(urlStr, tag string, wasSucced, wasHistory bool, out cha
 	}
 
 	slog.Debug("订阅解析完成", "URL", urlStr, "有效节点", count)
+
+	// 释放局部引用，帮助 GC 回收 YAML 解析产生的临时对象
+	// 火焰图显示 YAML 解析占 76% 的累计内存分配
+	data = nil
+	nodes = nil
 }
 
 // parseSubscriptionData 智能分发解析器
@@ -555,6 +563,22 @@ var (
 	clientMapCache sync.Map
 )
 
+// datePlaceholderRegexes 预编译日期占位符正则，避免每次替换时重复编译
+var datePlaceholderRegexes = []struct {
+	re  *regexp.Regexp
+	fmt string
+}{
+	{regexp.MustCompile(`(?i)\{ymd\}`), "20060102"},
+	{regexp.MustCompile(`(?i)\{y-m-d\}`), "2006-01-02"},
+	{regexp.MustCompile(`(?i)\{y_m_d\}`), "2006_01_02"},
+	{regexp.MustCompile(`(?i)\{yy\}`), "2006"},
+	{regexp.MustCompile(`(?i)\{y\}`), "2006"},
+	{regexp.MustCompile(`(?i)\{mm\}`), "01"},
+	{regexp.MustCompile(`(?i)\{m\}`), "1"},
+	{regexp.MustCompile(`(?i)\{dd\}`), "02"},
+	{regexp.MustCompile(`(?i)\{d\}`), "2"},
+}
+
 // getClient 根据代理地址获取复用的 Client
 func getClient(proxyAddr string) *http.Client {
 	if v, ok := clientMapCache.Load(proxyAddr); ok {
@@ -564,9 +588,9 @@ func getClient(proxyAddr string) *http.Client {
 	// 创建新的 Transport
 	transport := &http.Transport{
 		TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
-		MaxIdleConns:        100,              // 全局最大空闲连接
-		MaxIdleConnsPerHost: 20,               // 每个 Host 最大空闲连接
-		IdleConnTimeout:     90 * time.Second, // 空闲超时
+		MaxIdleConns:        50,               // 降低全局最大空闲连接
+		MaxIdleConnsPerHost: 5,                // 每个 Host 最多保持 5 个空闲连接（订阅下载通常只需要1-2次）
+		IdleConnTimeout:     15 * time.Second, // 缩短空闲超时，订阅下载是短周期批量任务
 		DisableKeepAlives:   false,            // 开启长连接复用
 	}
 
@@ -652,10 +676,17 @@ func fetchOnce(target string, useProxy bool, timeoutSec int, ua string) ([]byte,
 		return nil, fmt.Errorf("订阅文件过大: %d MB", resp.ContentLength/1024/1024), true
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, MaxLimit))
-	if err != nil {
+	// 根据 Content-Length 预分配 buffer，避免 ReadAll 的多次扩容
+	var buf bytes.Buffer
+	if resp.ContentLength > 0 && resp.ContentLength < MaxLimit {
+		buf.Grow(int(resp.ContentLength))
+	} else {
+		buf.Grow(64 * 1024) // 默认 64KB
+	}
+	if _, err := io.Copy(&buf, io.LimitReader(resp.Body, MaxLimit)); err != nil {
 		return nil, err, false
 	}
+	body := buf.Bytes()
 
 	if len(body) >= MaxLimit {
 		return nil, fmt.Errorf("订阅文件超过 50MB 限制"), true
@@ -944,22 +975,9 @@ func hasDatePlaceholder(s string) bool {
 }
 
 func replaceDatePlaceholders(s string, t time.Time) string {
-	reMap := map[*regexp.Regexp]string{
-		regexp.MustCompile(`(?i)\{ymd\}`):   t.Format("20060102"),
-		regexp.MustCompile(`(?i)\{y-m-d\}`): t.Format("2006-01-02"),
-		regexp.MustCompile(`(?i)\{y_m_d\}`): t.Format("2006_01_02"),
-		regexp.MustCompile(`(?i)\{yy\}`):    t.Format("2006"),
-		regexp.MustCompile(`(?i)\{y\}`):     t.Format("2006"),
-		// 月份：补零 vs 不补零
-		regexp.MustCompile(`(?i)\{mm\}`): t.Format("01"),
-		regexp.MustCompile(`(?i)\{m\}`):  t.Format("1"),
-		// 日期：补零 vs 不补零
-		regexp.MustCompile(`(?i)\{dd\}`): t.Format("02"),
-		regexp.MustCompile(`(?i)\{d\}`):  t.Format("2"),
-	}
 	out := s
-	for re, val := range reMap {
-		out = re.ReplaceAllString(out, val)
+	for _, item := range datePlaceholderRegexes {
+		out = item.re.ReplaceAllString(out, t.Format(item.fmt))
 	}
 	return out
 }

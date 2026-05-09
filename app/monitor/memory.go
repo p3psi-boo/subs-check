@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -40,7 +41,13 @@ func StartMemoryMonitor() {
 	if strings.ToLower(os.Getenv("SUB_CHECK_MEM_MONITOR")) != "" {
 		go func() {
 			var m runtime.MemStats
-			ticker := time.NewTicker(30 * time.Second)
+			interval := 30 * time.Second
+			if v := os.Getenv("SUB_CHECK_MEM_INTERVAL"); v != "" {
+				if d, err := time.ParseDuration(v); err == nil && d > 0 {
+					interval = d
+				}
+			}
+			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 
 			for range ticker.C {
@@ -91,6 +98,10 @@ func checkMemory(memoryLimit uint64) {
 			"heapFrag", human.HumanSize(float64(heapFrag)),
 			"limit", human.HumanSize(float64(memoryLimit)))
 
+		// 尝试先释放资源，再重启
+		runtime.GC()
+		debug.FreeOSMemory()
+
 		// 重新启动自己
 		cmd := getSelfCommand()
 		if cmd != nil {
@@ -99,6 +110,9 @@ func checkMemory(memoryLimit uint64) {
 			cmd.Start() // 让新进程启动
 			slog.Warn("因为内存问题启动了新进程，二进制用户如果需要关闭请关闭此窗口/终端")
 		}
+
+		// 等待一小段时间让新进程启动并给资源释放留出窗口
+		time.Sleep(500 * time.Millisecond)
 
 		// 退出当前进程
 		os.Exit(1)

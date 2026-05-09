@@ -331,8 +331,19 @@ func (pt *ProgressTracker) refreshStage() {
 }
 
 // showProgress 负责在控制台中渲染进度条。
+// 根据节点总数自适应刷新间隔，减少高并发下的 I/O 开销。
 func (pc *ProxyChecker) showProgress(done <-chan struct{}) {
-	ticker := time.NewTicker(100 * time.Millisecond)
+	total := pc.proxyCount
+	interval := 100 * time.Millisecond
+	if total >= 10000 {
+		interval = 1000 * time.Millisecond
+	} else if total >= 1000 {
+		interval = 500 * time.Millisecond
+	} else if total >= 200 {
+		interval = 250 * time.Millisecond
+	}
+
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {

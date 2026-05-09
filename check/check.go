@@ -444,9 +444,6 @@ func (pc *ProxyChecker) distributeJobs(proxies []map[string]any, ctx context.Con
 	var proxyIndex atomic.Int64
 	proxyIndex.Store(-1) // 初始化为 -1
 
-	// 定义主动 GC 的阈值
-	const gcThreshold = 200000
-
 	// 启动工作协程池
 	for range concurrency {
 		wg.Go(func() {
@@ -468,20 +465,11 @@ func (pc *ProxyChecker) distributeJobs(proxies []map[string]any, ctx context.Con
 				// 如果 mapping 被传给了 Client，等 Job.Close() 时它也会变成垃圾。
 				proxies[index] = nil
 
-				// 周期性强制归还内存
-				// 只有当索引达到阈值倍数时触发
-				if index > 0 && index%gcThreshold == 0 {
-					// 异步执行，尽量不阻塞分发，但在 CPU 极高时可能会有些许延迟
-					go func(currentIdx int64) {
-						slog.Debug(fmt.Sprintf("已处理 %d 个节点，正在执行主动内存回收...", currentIdx))
-						debug.FreeOSMemory()
-					}(index)
-				}
-
 				cli := CreateClient(mapping)
 				if cli == nil {
 					// 创建失败：视为 alive 完成（失败），不进入 speed/media
 					pc.pt.CountAlive(false)
+					mapping = nil // 切断局部引用，帮助 GC
 					continue
 				}
 
@@ -1116,8 +1104,8 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 		},
 		DisableKeepAlives:   false,
 		Proxy:               nil,
-		IdleConnTimeout:     5 * time.Second,
-		MaxIdleConnsPerHost: 5,
+		IdleConnTimeout:     2 * time.Second,
+		MaxIdleConnsPerHost: 2,
 	}
 
 	statsTransport.Base = baseTransport
