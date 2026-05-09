@@ -22,6 +22,8 @@
 18. **Dedup map capacity 2048→512 per sub** — Less empty map overhead during subscription parsing, faster GC scans. Best 46.29 MB. **21.3× confidence.**
 19. **Structured slog in `CreateClient` hot path** — Replace `fmt.Sprintf` with `slog.Debug("msg", "key", value)` to avoid string formatting for disabled log levels. Code quality win.
 20. **Disable idle connection pool in check Transport** — `IdleConnTimeout` 2s→0, `MaxIdleConnsPerHost` 2→0. Prevents failed proxy connections from accumulating in the Transport idle pool. Combined with all previous: peak RSS ~41.8 MB vs ~57.5MB baseline (-27%). **22.5× confidence.**
+21. **`checkCtxDone` select→c.Err()** — Replace `select { case <-c.Done(): }` with direct `c.Err() != nil` check. Avoids per-node select overhead. Micro-optimization.
+22. **`needsCF()` cache in ProxyChecker** — Cache `needsCF(config.GlobalConfig.Platforms)` in `ProxyChecker` struct to avoid per-node platform loop. Code quality win.
 
 ## Attempted & Reverted (No Benefit or Worse)
 
@@ -58,6 +60,9 @@
 | aliveChan 1.2x→aliveConc/2 with lazy creation | Within noise (46.34-52.17) | **Revert**: no clear improvement, keep 1.2x for stability |
 | Periodic `FreeOSMemory()` during detection | RSS +5MB (51.80) | **Revert**: adds CPU overhead, no benefit when GOGC=10 keeps heap tight |
 | `MaxIdleConnsPerHost` 2→0, `IdleConnTimeout` 2s→0 | **Peak RSS ~41.8 MB** | **Keep**: eliminates idle connection pool accumulation across failed checks |
+| aliveChan 1.2x→2.0x with lazy creation | RSS +2MB (48.00) | **Revert**: no benefit; 1.2x is optimal |
+| `checkCtxDone` select→c.Err() | RSS stable | **Keep**: avoids select overhead per-node; micro-optimization |
+| `needsCF()` cache in ProxyChecker | RSS stable | **Keep**: removes per-node platform loop; code quality win |
 | **Lazy ProxyClient creation** | Peak RSS ~46-51 MB (best 46.14) | **Keep**: aliveChan buffer no longer holds heavy mihomo proxies. Peak concurrent proxies cut from ~110 to ~50. 24.3× confidence |
 | Map capacity 2048→512 per sub | Peak RSS ~46-47 MB (best 46.29) | **Keep**: less empty map overhead, faster GC scans. 21.3× confidence |
 | `fmt.Sprintf` → structured slog in `CreateClient` | RSS stable | **Keep**: removes per-node string formatting in hot path. Code quality win |
