@@ -9,6 +9,8 @@ mihomo-check*
 
 .idea
 .vscode
+.direnv/
+.gopath/
 
 .DS_Store
 
