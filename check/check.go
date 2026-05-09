@@ -454,6 +454,10 @@ func (pc *ProxyChecker) distributeJobs(proxies []map[string]any, ctx context.Con
 
 	// 对于少量节点，单 goroutine 分发足够快，且避免了 worker pool 的
 	// 49 个额外 goroutine 栈、sync.WaitGroup 和原子竞争开销。
+	//
+	// 关键优化：不在此创建 ProxyClient（mihomo 代理实例），而是在 runAliveStage worker
+	// 中按需创建。aliveChan 缓冲中只保留轻量的 map[string]any，不保留沉重的
+	// mihomo 代理实例，峰值并发代理数从 aliveChan缓冲+worker数 降至仅 worker 数。
 	if len(proxies) <= 1000 {
 		for i, mapping := range proxies {
 			if checkCtxDone(ctx) {
@@ -461,15 +465,7 @@ func (pc *ProxyChecker) distributeJobs(proxies []map[string]any, ctx context.Con
 			}
 			proxies[i] = nil
 
-			cli := CreateClient(mapping)
-			if cli == nil {
-				pc.pt.CountAlive(false)
-				mapping = nil
-				continue
-			}
-
 			job := &ProxyJob{
-				Client: cli,
 				Result: Result{Proxy: mapping},
 			}
 			job.NeedCF = config.GlobalConfig.DropBadCfNodes ||
@@ -509,20 +505,11 @@ func (pc *ProxyChecker) distributeJobs(proxies []map[string]any, ctx context.Con
 				mapping := proxies[index]
 
 				// 任务取出后，立即断开源切片的引用
-				// 此时，如果 mapping 没被后续 CreateClient 引用，它就是垃圾；
-				// 如果 mapping 被传给了 Client，等 Job.Close() 时它也会变成垃圾。
+				// ProxyClient（mihomo 代理实例）不在此处创建，而是在 runAliveStage worker
+				// 中按需创建，以减少 aliveChan 缓冲中的重量级对象数量。
 				proxies[index] = nil
 
-				cli := CreateClient(mapping)
-				if cli == nil {
-					// 创建失败：视为 alive 完成（失败），不进入 speed/media
-					pc.pt.CountAlive(false)
-					mapping = nil // 切断局部引用，帮助 GC
-					continue
-				}
-
 				job := &ProxyJob{
-					Client: cli,
 					Result: Result{Proxy: mapping},
 				}
 				job.NeedCF = config.GlobalConfig.DropBadCfNodes ||
@@ -563,6 +550,17 @@ func (pc *ProxyChecker) runAliveStage(ctx context.Context) {
 		wg.Go(func() {
 			for job := range pc.aliveChan {
 				if checkCtxDone(ctx) {
+					job.Close()
+					continue
+				}
+				// 按需创建 mihomo 代理客户端：延迟到 worker 处理时才创建，
+				// 避免 aliveChan 缓冲中堆积大量重量级 ProxyClient 实例。
+				job.Client = CreateClient(job.Result.Proxy)
+				if job.Client == nil {
+					// 创建失败：视为 alive 完成（失败），不进入 speed/media
+					if job.aliveMarked.CompareAndSwap(false, true) {
+						pc.pt.CountAlive(false)
+					}
 					job.Close()
 					continue
 				}
