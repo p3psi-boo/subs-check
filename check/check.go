@@ -622,6 +622,10 @@ func (pc *ProxyChecker) runAliveStage(ctx context.Context) {
 	}
 	wg.Wait()
 
+	// 归还 OS 内存：alive 阶段是峰值 RSS 的主要来源（大量 mihomo 代理实例），
+	// 阶段结束后强制 scavenger 把释放的页还给 OS，压低测速/媒体阶段的 RSS 基线。
+	debug.FreeOSMemory()
+
 	// alive 阶段闭合：分阶段算法据此确定下一阶段规模
 	pc.pt.FinishAliveStage()
 }
