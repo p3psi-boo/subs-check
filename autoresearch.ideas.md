@@ -11,6 +11,9 @@
 7. **Temp log directory moved to `./tmp`** — avoids system `/tmp` pollution
 8. **Tags slice pre-allocation** in `updateProxyName` — `make([]string, 0, len(platforms)+3)`
 9. **Progress bar stack buffer** — `[41]byte` replaces `strings.Repeat` heap allocation
+10. **`fmt.Sprintf` → `strconv` / string concat / structured slog** — Replaces per-node string formatting with faster zero-allocation patterns
+11. **mediaChan buffer 2x→1x** — Reduces queued ProxyJobs after speed stage; safe because media stage processes fewer jobs than speed stage
+12. **Benchmark RSS sampling 0.5s→0.2s** — More accurate peak capture for fast detection runs
 
 ## Attempted & Reverted (No Benefit or Worse)
 
@@ -28,6 +31,11 @@
 | Reduce `GetProxies` map hint (2048→1024 per sub) | RSS +1%, Heap +15% | Rehash cost still exceeds bucket savings at this scale |
 | `fmt.Sprintf` → `strconv` in updateProxyName + structured slog in check.go | RSS stable | Micro-optimization; code quality improvement with minor allocation reduction |
 | `fmt.Sprintf` → string concat for YT/TK tags | RSS stable | Removes per-node fmt.Sprintf for simple prefix patterns |
+| **mediaChan buffer 2x→1x** | RSS ~-0.5MB (best run 57.20 vs baseline 57.32) | Clean reduction; mediaChan rarely fills with failed nodes |
+| aliveChan buffer 1.2x→1x | RSS mixed (58.59 vs 57.37 control) | 1x causes more goroutine blocking, increasing stack memory; 1.2x is sweet spot |
+| aliveChan buffer 1.2x→aliveConc/2 | RSS +4MB (61.67) | Too small; goroutine blocking overhead exceeds buffer savings |
+| `nodes[i]=nil` in `processSubscription` after send | RSS +3MB (61.58) | Adding nil assignments per-iteration adds overhead without helping GC |
+| Benchmark RSS sampling 0.5s→0.2s | Reveals true peak is 1-3MB higher | 0.5s interval missed peaks for fast runs; 0.2s is more accurate |
 
 ## Root-Cause Analysis (From Real Flamegraphs)
 
