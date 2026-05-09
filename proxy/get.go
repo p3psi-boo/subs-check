@@ -93,7 +93,7 @@ func GetProxies() ([]map[string]any, int, int, int, error) {
 	fetchConcurrency := subscriptionFetchConcurrency()
 	bufferSize := max(1000, fetchConcurrency*1000)
 	bufferSize = min(bufferSize, 100000)
-	initialNodeCapacity := max(4096, len(subUrls)*2048)
+	initialNodeCapacity := max(4096, len(subUrls)*512)
 	initialNodeCapacity = min(initialNodeCapacity, 200000)
 
 	proxyChan := make(chan ProxyNode, bufferSize)
