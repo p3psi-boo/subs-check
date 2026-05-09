@@ -195,11 +195,7 @@ func NewProxyChecker(proxyCount int) *ProxyChecker {
 		mediaConcurrent: mediaConc,
 
 		// 设置缓冲通道
-		// aliveChan 缓冲严格等于并发数，避免过度排队导致大量未测活的 mihomo 代理实例
-		// 同时持有内存（每个 ProxyJob.Client 包含一个 mihomo proxy 实例）。
-		// 1.2x 的额外缓冲对峰值内存有显著贡献，而测活阶段的 backpressure 阻塞
-		// distributeJobs 反而减少了同时创建的实例数。
-		aliveChan: make(chan *ProxyJob, aliveConc),
+		aliveChan: make(chan *ProxyJob, int(float64(aliveConc)*1.2)),
 		speedChan: make(chan *ProxyJob, speedChanLength),
 		// mediaChan 同样缩减：成功节点通常远少于 mediaConc，2x 缓冲 rarely used
 		mediaChan: make(chan *ProxyJob, mediaConc),
