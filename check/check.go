@@ -173,7 +173,7 @@ func NewProxyChecker(proxyCount int) *ProxyChecker {
 		// 超大线程数
 		if threadCount > 1000 {
 			slog.Info("除非你的 CPU 和路由器同时允许, 超过 1000 并发可能影响其它上网程序,如确有需求,请在配置文件分别指定测活-测速-媒体检测每个阶段并发数")
-			slog.Info(fmt.Sprintf("已限制测活并发数: %d", aliveConc))
+			slog.Info("已限制测活并发数", "aliveConcurrent", aliveConc)
 		}
 	}
 
@@ -227,15 +227,15 @@ func Check() ([]Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("获取节点失败: %w", err)
 	}
-	slog.Info(fmt.Sprintf("已获取节点数量: %d", rawCount))
-	slog.Info(fmt.Sprintf("去重后节点数量: %d", len(proxies)))
+	slog.Info("已获取节点数量", "count", rawCount)
+	slog.Info("去重后节点数量", "count", len(proxies))
 
 	if subWasSuccedLength > 0 {
-		slog.Info(fmt.Sprintf("已加载上次检测可用节点，数量: %d", subWasSuccedLength))
+		slog.Info("已加载上次检测可用节点", "count", subWasSuccedLength)
 	}
 
 	if historyLength > 0 {
-		slog.Info(fmt.Sprintf("已加载历次检测可用节点，数量: %d", historyLength))
+		slog.Info("已加载历次检测可用节点", "count", historyLength)
 	}
 
 	// 设置之前成功的节点顺序在前
@@ -256,7 +256,7 @@ func Check() ([]Result, error) {
 		proxyutils.SmartShuffleByServer(tail, cfg)
 
 		cidr := proxyutils.ThresholdToCIDR(cfg.Threshold)
-		slog.Info(fmt.Sprintf("节点乱序, 相同 CIDR%s 最小间距: %d", cidr, cfg.MinSpacing))
+		slog.Info("节点乱序", "CIDR", cidr, "minSpacing", cfg.MinSpacing)
 	}
 
 	if len(proxies) == 0 {
@@ -884,7 +884,7 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 			if res.Youtube != "" {
 				// 只有YouTube地区和节点位置不一致时才添加YouTube地区
 				if res.Country != res.Youtube {
-					tags = append(tags, fmt.Sprintf("YT-%s", res.Youtube))
+					tags = append(tags, "YT-"+res.Youtube)
 				} else {
 					tags = append(tags, "YT")
 				}
@@ -893,7 +893,7 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 			if res.TikTok != "" {
 				// 只有TikTok地区和节点位置不一致时才添加TikTok地区
 				if res.Country != res.TikTok {
-					tags = append(tags, fmt.Sprintf("TK-%s", res.TikTok))
+					tags = append(tags, "TK-"+res.TikTok)
 				} else {
 					tags = append(tags, "TK")
 				}
