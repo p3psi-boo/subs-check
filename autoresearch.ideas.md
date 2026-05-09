@@ -14,6 +14,9 @@
 10. **`fmt.Sprintf` → `strconv` / string concat / structured slog** — Replaces per-node string formatting with faster zero-allocation patterns
 11. **mediaChan buffer 2x→1x** — Reduces queued ProxyJobs after speed stage; safe because media stage processes fewer jobs than speed stage
 12. **Benchmark RSS sampling 0.5s→0.2s** — More accurate peak capture for fast detection runs
+13. **Conditional geoDB loading** — Skip 5-10MB MaxMind DB when `rename-node=false` and no `iprisk` platform
+14. **Single-goroutine `distributeJobs` for ≤1000 nodes** — Eliminates worker pool overhead for small workloads; preserves pool for >1000
+15. **Package-level regex pre-compilation** — `mediaTagRegex` in `check.go` and `tiktokRegionRegex` in `tiktok.go`; removes per-node compilation hotspots
 
 ## Attempted & Reverted (No Benefit or Worse)
 
@@ -37,6 +40,11 @@
 | `nodes[i]=nil` in `processSubscription` after send | RSS +3MB (61.58) | Adding nil assignments per-iteration adds overhead without helping GC |
 | Benchmark RSS sampling 0.5s→0.2s | Reveals true peak is 1-3MB higher | 0.5s interval missed peaks for fast runs; **0.2s is more accurate** |
 | **Conditional geoDB loading** | Saves 5-10MB when rename-node=false & no iprisk | For users who don't need geolocation; no impact when geoDB is needed |
+| **Single-goroutine distributeJobs ≤1000 nodes** | RSS stable, heap inuse slightly lower | Eliminates 49 goroutine stacks, atomic contention, WaitGroup overhead; preserves pool for >1000 |
+| **mediaTagRegex package-level pre-compile** | Fixes per-node regex compilation in `updateProxyName` | Removes CPU and alloc hotspot for successful nodes; benchmark doesn't exercise it |
+| **tiktokRegionRegex package-level pre-compile** | Fixes per-node regex compilation in `CheckTikTok` | Same as above; media checks only run on successful nodes |
+| Map capacity 2048→1536 per sub | Within noise (54.51-60.22 MB) | **Revert**: 2048 is near optimal; lower causes rehash overhead for large subscriptions |
+| aliveChan 1.2x→1x with single-goroutine distributeJobs | RSS +1.5MB (59.53) | **Revert**: 1.2x remains sweet spot even with single-goroutine distribution |
 
 ## Root-Cause Analysis (From Real Flamegraphs)
 
