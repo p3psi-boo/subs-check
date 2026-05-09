@@ -65,18 +65,18 @@ fi
 # Strip ANSI color codes helper
 strip_ansi() { sed 's/\x1b\[[0-9;]*m//g'; }
 
-# Parse peak HeapAlloc from log
-HEAP=$(grep "内存使用情况" tmp/bench.log 2>/dev/null | strip_ansi | \
+# Parse peak HeapAlloc from log (grep -a: force text mode despite \r chars in log)
+HEAP=$(grep -a "内存使用情况" tmp/bench.log 2>/dev/null | strip_ansi | \
     sed -n 's/.*HeapAlloc="\([0-9.]*\).*/\1/p' | sort -n | tail -1)
 [ -z "$HEAP" ] && HEAP=0
 
 # Parse peak HeapInuse
-INUSE=$(grep "内存使用情况" tmp/bench.log 2>/dev/null | strip_ansi | \
+INUSE=$(grep -a "内存使用情况" tmp/bench.log 2>/dev/null | strip_ansi | \
     sed -n 's/.*HeapInuse="\([0-9.]*\).*/\1/p' | sort -n | tail -1)
 [ -z "$INUSE" ] && INUSE=0
 
 # Parse peak Sys
-SYS=$(grep "内存使用情况" tmp/bench.log 2>/dev/null | strip_ansi | \
+SYS=$(grep -a "内存使用情况" tmp/bench.log 2>/dev/null | strip_ansi | \
     sed -n 's/.*Sys="\([0-9.]*\).*/\1/p' | sort -n | tail -1)
 [ -z "$SYS" ] && SYS=0
 

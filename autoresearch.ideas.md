@@ -24,6 +24,8 @@
 | Map pre-allocation in `mergeUniqueProxies` / `checkSubscriptionSuccessRate` | RSS +8% | Measurement noise; effect below threshold |
 | Reduce `GetProxies` map hint (2048→256 per sub) | RSS +1%, Heap +15% | Hint too low causes rehash allocations during growth |
 | `StatsTransport.CloseIdleConnections()` proxy method | N/A (reverted with group) | Clean but no measurable resource impact |
+| Remove `Connection: close` from google.go + cloudflare.go | RSS +5-8% | Connection reuse increases idle connection retention; no benefit for failed nodes |
+| Reduce `GetProxies` map hint (2048→1024 per sub) | RSS +1%, Heap +15% | Rehash cost still exceeds bucket savings at this scale |
 
 ## Root-Cause Analysis (From Real Flamegraphs)
 

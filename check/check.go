@@ -839,9 +839,9 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 	if config.GlobalConfig.SpeedTestURL != "" && speed > 0 {
 		var speedStr string
 		if speed < 100 {
-			speedStr = fmt.Sprintf("%dKB/s", speed)
+			speedStr = strconv.Itoa(speed) + "KB/s"
 		} else {
-			speedStr = fmt.Sprintf("%.1fMB/s", float64(speed)/1024)
+			speedStr = strconv.FormatFloat(float64(speed)/1024, 'f', 1, 64) + "MB/s"
 		}
 		tags = append(tags, speedStr)
 	}
