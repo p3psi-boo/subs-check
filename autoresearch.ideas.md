@@ -17,6 +17,7 @@
 13. **Conditional geoDB loading** — Skip 5-10MB MaxMind DB when `rename-node=false` and no `iprisk` platform
 14. **Single-goroutine `distributeJobs` for ≤1000 nodes** — Eliminates worker pool overhead for small workloads; preserves pool for >1000
 15. **Package-level regex pre-compilation** — `mediaTagRegex` in `check.go` and `tiktokRegionRegex` in `tiktok.go`; removes per-node compilation hotspots
+16. **GOGC tuning (SetGCPercent 10) during `check.Check()`** — Largest single optimization: peak RSS ~46-47MB vs ~57-58MB baseline (-18%). Peak heap cut from ~17MB to ~5.5MB (-51%). Triggered by detection-phase massive temporary allocations.
 
 ## Attempted & Reverted (No Benefit or Worse)
 
@@ -45,6 +46,9 @@
 | **tiktokRegionRegex package-level pre-compile** | Fixes per-node regex compilation in `CheckTikTok` | Same as above; media checks only run on successful nodes |
 | Map capacity 2048→1536 per sub | Within noise (54.51-60.22 MB) | **Revert**: 2048 is near optimal; lower causes rehash overhead for large subscriptions |
 | aliveChan 1.2x→1x with single-goroutine distributeJobs | RSS +1.5MB (59.53) | **Revert**: 1.2x remains sweet spot even with single-goroutine distribution |
+| GOGC env 50 (whole program) | ~52 MB peak RSS | Code-level equivalent: `debug.SetGCPercent(50)` in `check.Check()` |
+| GOGC 50→25 in `check.Check()` | ~48 MB peak RSS | Further improvement; diminishing returns |
+| GOGC 25→10 in `check.Check()` | ~46-47 MB peak RSS | **Keep**: best result, stable across 3+ runs, no duration regression |
 
 ## Root-Cause Analysis (From Real Flamegraphs)
 
