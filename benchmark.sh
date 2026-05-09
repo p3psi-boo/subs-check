@@ -49,7 +49,7 @@ while [ $(( $(date +%s) - START )) -lt $TIMEOUT ]; do
         DURATION=$(( $(date +%s) - START ))
         break
     fi
-    sleep 0.5
+    sleep 0.2
 done
 
 kill $APP_PID 2>/dev/null || true
