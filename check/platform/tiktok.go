@@ -6,6 +6,9 @@ import (
 	"regexp"
 )
 
+// tiktokRegionRegex 预编译 TikTok 地区正则，避免每次媒体检测时重复编译
+var tiktokRegionRegex = regexp.MustCompile(`"region"\s*:\s*"([A-Z]{2})"`)
+
 func CheckTikTok(httpClient *http.Client) (string, error) {
 	req, err := http.NewRequest("GET", "https://www.tiktok.com/", nil)
 	if err != nil {
@@ -27,9 +30,7 @@ func CheckTikTok(httpClient *http.Client) (string, error) {
 		return "", err
 	}
 
-	// 使用正则匹配 "region":"XX"
-	re := regexp.MustCompile(`"region"\s*:\s*"([A-Z]{2})"`)
-	matches := re.FindSubmatch(body)
+	matches := tiktokRegionRegex.FindSubmatch(body)
 	if len(matches) >= 2 {
 		return string(matches[1]), nil
 	}
