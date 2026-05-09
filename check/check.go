@@ -30,6 +30,9 @@ import (
 	"github.com/sinspired/subs-check/save/method"
 )
 
+// mediaTagRegex 预编译标签正则，避免每次重命名时重复编译
+var mediaTagRegex = regexp.MustCompile(`\s*\|(?:NF|D\+|GPT⁺|GPT|GM|X|YT|KeepSucced|KeepHistory|KeepSuccess|YT-[^|]+|TK|TK-[^|]+|\d+%)`)
+
 // 对外暴露变量，兼容GUI调用
 var (
 	Progress   atomic.Uint32 // 已检测数量（语义见算法）
@@ -886,7 +889,7 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 
 	if config.GlobalConfig.MediaCheck {
 		// 移除旧标签
-		name = regexp.MustCompile(`\s*\|(?:NF|D\+|GPT⁺|GPT|GM|X|YT|KeepSucced|KeepHistory|KeepSuccess|YT-[^|]+|TK|TK-[^|]+|\d+%)`).ReplaceAllString(name, "")
+		name = mediaTagRegex.ReplaceAllString(name, "")
 	}
 
 	// 平台标签（按用户配置顺序）
