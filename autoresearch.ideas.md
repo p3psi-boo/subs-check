@@ -31,11 +31,12 @@
 | Reduce `GetProxies` map hint (2048→1024 per sub) | RSS +1%, Heap +15% | Rehash cost still exceeds bucket savings at this scale |
 | `fmt.Sprintf` → `strconv` in updateProxyName + structured slog in check.go | RSS stable | Micro-optimization; code quality improvement with minor allocation reduction |
 | `fmt.Sprintf` → string concat for YT/TK tags | RSS stable | Removes per-node fmt.Sprintf for simple prefix patterns |
-| **mediaChan buffer 2x→1x** | RSS ~-0.5MB (best run 57.20 vs baseline 57.32) | Clean reduction; mediaChan rarely fills with failed nodes |
-| aliveChan buffer 1.2x→1x | RSS mixed (58.59 vs 57.37 control) | 1x causes more goroutine blocking, increasing stack memory; 1.2x is sweet spot |
+| **mediaChan buffer 2x→1x** | RSS ~-0.5MB (confirmed with 3.0× confidence) | Clean reduction; mediaChan rarely fills with failed nodes |
+| aliveChan buffer 1.2x→1x | RSS mixed (58.59 vs 57.37 control) | 1x causes more goroutine blocking, increasing stack memory; **1.2x is sweet spot** |
 | aliveChan buffer 1.2x→aliveConc/2 | RSS +4MB (61.67) | Too small; goroutine blocking overhead exceeds buffer savings |
 | `nodes[i]=nil` in `processSubscription` after send | RSS +3MB (61.58) | Adding nil assignments per-iteration adds overhead without helping GC |
-| Benchmark RSS sampling 0.5s→0.2s | Reveals true peak is 1-3MB higher | 0.5s interval missed peaks for fast runs; 0.2s is more accurate |
+| Benchmark RSS sampling 0.5s→0.2s | Reveals true peak is 1-3MB higher | 0.5s interval missed peaks for fast runs; **0.2s is more accurate** |
+| **Conditional geoDB loading** | Saves 5-10MB when rename-node=false & no iprisk | For users who don't need geolocation; no impact when geoDB is needed |
 
 ## Root-Cause Analysis (From Real Flamegraphs)
 
