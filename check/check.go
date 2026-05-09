@@ -442,6 +442,39 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 func (pc *ProxyChecker) distributeJobs(proxies []map[string]any, ctx context.Context) {
 	defer close(pc.aliveChan)
 
+	// 对于少量节点，单 goroutine 分发足够快，且避免了 worker pool 的
+	// 49 个额外 goroutine 栈、sync.WaitGroup 和原子竞争开销。
+	if len(proxies) <= 1000 {
+		for i, mapping := range proxies {
+			if checkCtxDone(ctx) {
+				return
+			}
+			proxies[i] = nil
+
+			cli := CreateClient(mapping)
+			if cli == nil {
+				pc.pt.CountAlive(false)
+				mapping = nil
+				continue
+			}
+
+			job := &ProxyJob{
+				Client: cli,
+				Result: Result{Proxy: mapping},
+			}
+			job.NeedCF = config.GlobalConfig.DropBadCfNodes ||
+				(config.GlobalConfig.MediaCheck && needsCF(config.GlobalConfig.Platforms))
+
+			select {
+			case pc.aliveChan <- job:
+			case <-ctx.Done():
+				job.Close()
+				return
+			}
+		}
+		return
+	}
+
 	concurrency := min(pc.proxyCount, pc.aliveConcurrent)
 	var wg sync.WaitGroup
 
