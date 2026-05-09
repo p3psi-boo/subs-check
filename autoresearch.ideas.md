@@ -24,6 +24,7 @@
 20. **Disable idle connection pool in check Transport** — `IdleConnTimeout` 2s→0, `MaxIdleConnsPerHost` 2→0. Prevents failed proxy connections from accumulating in the Transport idle pool. Combined with all previous: peak RSS ~41.8 MB vs ~57.5MB baseline (-27%). **22.5× confidence.**
 21. **`checkCtxDone` select→c.Err()** — Replace `select { case <-c.Done(): }` with direct `c.Err() != nil` check. Avoids per-node select overhead. Micro-optimization.
 22. **`needsCF()` cache in ProxyChecker** — Cache `needsCF(config.GlobalConfig.Platforms)` in `ProxyChecker` struct to avoid per-node platform loop. Code quality win.
+23. **`FreeOSMemory()` after alive stage** — Call `debug.FreeOSMemory()` after `runAliveStage` workers finish. GOGC=10 already reclaims heap; this encourages OS scavenger to return pages before speed/media stages. Post-peak RSS cleanup.
 
 ## Attempted & Reverted (No Benefit or Worse)
 
