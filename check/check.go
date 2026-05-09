@@ -1151,8 +1151,8 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 		},
 		DisableKeepAlives:   false,
 		Proxy:               nil,
-		IdleConnTimeout:     2 * time.Second,
-		MaxIdleConnsPerHost: 2,
+		IdleConnTimeout:     0,
+		MaxIdleConnsPerHost: 0,
 	}
 
 	statsTransport.Base = baseTransport
