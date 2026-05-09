@@ -20,6 +20,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/juju/ratelimit"
 	"github.com/metacubex/mihomo/adapter"
+	"github.com/samber/lo"
 	"github.com/metacubex/mihomo/constant"
 	"github.com/oschwald/maxminddb-golang/v2"
 	"github.com/sinspired/subs-check/assets"
@@ -284,21 +285,24 @@ func (pc *ProxyChecker) run(proxies []map[string]any) ([]Result, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 如果 MaxMindDBPath 为空会自动使用 subs-check 内置数据库
-	geoDB, err := assets.OpenMaxMindDB(config.GlobalConfig.MaxMindDBPath)
-
-	if err != nil {
-		slog.Debug(fmt.Sprintf("打开 MaxMind 数据库失败: %v", err))
-		geoDB = nil
-	}
-
-	// 确保数据库在函数结束时关闭
-	if geoDB != nil {
-		defer func() {
-			if err := geoDB.Close(); err != nil {
-				slog.Debug(fmt.Sprintf("关闭 MaxMind 数据库失败: %v", err))
-			}
-		}()
+	// 条件加载 MaxMind DB：仅在需要地理定位时才加载（rename-node 或 iprisk 平台）。
+	// 内置数据库解压后约 5-10MB，跳过加载可显著降低不需要地理定位场景下的峰值内存。
+	var geoDB *maxminddb.Reader
+	needGeoDB := config.GlobalConfig.RenameNode || lo.Contains(config.GlobalConfig.Platforms, "iprisk")
+	if needGeoDB {
+		var err error
+		geoDB, err = assets.OpenMaxMindDB(config.GlobalConfig.MaxMindDBPath)
+		if err != nil {
+			slog.Debug(fmt.Sprintf("打开 MaxMind 数据库失败: %v", err))
+			geoDB = nil
+		}
+		if geoDB != nil {
+			defer func() {
+				if err := geoDB.Close(); err != nil {
+					slog.Debug(fmt.Sprintf("关闭 MaxMind 数据库失败: %v", err))
+				}
+			}()
+		}
 	}
 
 	slog.Info("开始检测节点")
