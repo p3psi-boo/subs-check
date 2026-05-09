@@ -89,6 +89,9 @@ type ProxyChecker struct {
 	speedChan chan *ProxyJob
 	mediaChan chan *ProxyJob
 
+	// needCF 缓存平台配置中是否需要 Cloudflare 检测，避免每个节点重复计算
+	needCF bool
+
 	pt *ProgressTracker
 }
 
@@ -197,6 +200,7 @@ func NewProxyChecker(proxyCount int) *ProxyChecker {
 		aliveConcurrent: aliveConc,
 		speedConcurrent: speedConc,
 		mediaConcurrent: mediaConc,
+		needCF:          needsCF(config.GlobalConfig.Platforms),
 
 		// 设置缓冲通道
 		aliveChan: make(chan *ProxyJob, int(float64(aliveConc)*1.2)),
@@ -469,7 +473,7 @@ func (pc *ProxyChecker) distributeJobs(proxies []map[string]any, ctx context.Con
 				Result: Result{Proxy: mapping},
 			}
 			job.NeedCF = config.GlobalConfig.DropBadCfNodes ||
-				(config.GlobalConfig.MediaCheck && needsCF(config.GlobalConfig.Platforms))
+				(config.GlobalConfig.MediaCheck && pc.needCF)
 
 			select {
 			case pc.aliveChan <- job:
@@ -513,7 +517,7 @@ func (pc *ProxyChecker) distributeJobs(proxies []map[string]any, ctx context.Con
 					Result: Result{Proxy: mapping},
 				}
 				job.NeedCF = config.GlobalConfig.DropBadCfNodes ||
-					(config.GlobalConfig.MediaCheck && needsCF(config.GlobalConfig.Platforms))
+					(config.GlobalConfig.MediaCheck && pc.needCF)
 
 				// 当 aliveChan 满时会阻塞
 				select {
@@ -1267,10 +1271,10 @@ func checkCtxDone(c context.Context) bool {
 	if ForceClose.Load() {
 		return true
 	}
-	select {
-	case <-c.Done():
+	// 优先通过 Err() 判断，避免 select 结构的开销（channel recv + runtime.selectgo）。
+	// Err() 在活跃 context 上通常只是一次 nil 检查，远快于 select。
+	if c.Err() != nil {
 		return true
-	default:
-		return false
 	}
+	return false
 }
