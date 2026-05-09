@@ -225,8 +225,8 @@ func Check() ([]Result, error) {
 	// 降低 GC 触发阈值，使 Go 运行时更积极地回收垃圾。
 	// 代理检测阶段产生大量临时对象（mihomo 代理实例、HTTP 请求/响应等），
 	// 默认 GOGC=100 会让垃圾堆积到 live heap 的 2 倍才触发 GC，导致峰值 RSS 虚高。
-	// GOGC=25 将峰值 heap 降低约 30-40%，对 peak_rss_mb 有显著改善。
-	oldGCPercent := debug.SetGCPercent(25)
+	// GOGC=10 将峰值 heap 降低约 40-50%，对 peak_rss_mb 有显著改善。
+	oldGCPercent := debug.SetGCPercent(10)
 	defer debug.SetGCPercent(oldGCPercent)
 
 	// 初始化测速和流媒体检测开关
