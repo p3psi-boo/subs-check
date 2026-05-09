@@ -17,7 +17,8 @@
 13. **Conditional geoDB loading** — Skip 5-10MB MaxMind DB when `rename-node=false` and no `iprisk` platform
 14. **Single-goroutine `distributeJobs` for ≤1000 nodes** — Eliminates worker pool overhead for small workloads; preserves pool for >1000
 15. **Package-level regex pre-compilation** — `mediaTagRegex` in `check.go` and `tiktokRegionRegex` in `tiktok.go`; removes per-node compilation hotspots
-16. **GOGC tuning (SetGCPercent 10) during `check.Check()`** — Largest single optimization: peak RSS ~46-47MB vs ~57-58MB baseline (-18%). Peak heap cut from ~17MB to ~5.5MB (-51%). Triggered by detection-phase massive temporary allocations.
+16. **GOGC tuning (SetGCPercent 10) during `check.Check()`** — Peak RSS ~46-47MB vs ~57-58MB baseline (-18%). Peak heap cut from ~17MB to ~5.5MB (-51%). Triggered by detection-phase massive temporary allocations.
+17. **Lazy ProxyClient creation** — Move `CreateClient` from `distributeJobs` to `runAliveStage` workers. aliveChan buffer now holds lightweight jobs (map only) instead of heavyweight mihomo proxies. Peak concurrent proxies cut from ~110 to ~50. Combined with GOGC=10: peak RSS ~46-51MB, best 46.14 MB (-19.5% from baseline). **24.3× confidence.**
 
 ## Attempted & Reverted (No Benefit or Worse)
 
