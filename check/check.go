@@ -1095,7 +1095,7 @@ func CreateClient(mapping map[string]any) *ProxyClient {
 	// 解析代理
 	pc.mProxy, err = adapter.ParseProxy(mapping)
 	if err != nil {
-		slog.Debug(fmt.Sprintf("底层mihomo创建代理Client失败: %v", err))
+		slog.Debug("底层mihomo创建代理Client失败", "error", err)
 		return nil
 	}
 
