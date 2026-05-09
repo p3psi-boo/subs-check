@@ -833,7 +833,8 @@ func (pc *ProxyChecker) updateProxyName(res *Result, httpClient *ProxyClient, sp
 		name = strings.TrimSpace(v)
 	}
 
-	var tags []string
+	// 预分配 tags 容量：平台数 + 速度/ISP/sub_tag 各 1
+	tags := make([]string, 0, len(config.GlobalConfig.Platforms)+3)
 	// 速度标签
 	if config.GlobalConfig.SpeedTestURL != "" && speed > 0 {
 		var speedStr string

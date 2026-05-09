@@ -3,7 +3,6 @@ package check
 import (
 	"fmt"
 	"math"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -390,12 +389,22 @@ func (pc *ProxyChecker) renderProgressString() string {
 	barWidth := 40
 	barFilled := int(percent / 100 * float64(barWidth))
 
+	// 使用栈分配构建进度条，避免 strings.Repeat 的每次堆分配
+	var barBuf [41]byte
+	for i := 0; i < barFilled && i < barWidth; i++ {
+		barBuf[i] = '='
+	}
+	if barFilled < barWidth {
+		barBuf[barFilled] = '>'
+	}
+	barStr := string(barBuf[:max(barFilled+1, 1)])
+
 	// 格式化输出：增加了 [阶段名]
 	// \r 清空当前行
 	return fmt.Sprintf("\r%s: [%-*s] %.1f%% (%d/%d) 可用: %d",
 		step,
 		barWidth,
-		strings.Repeat("=", barFilled)+">",
+		barStr,
 		percent,
 		currentChecked,
 		total,
