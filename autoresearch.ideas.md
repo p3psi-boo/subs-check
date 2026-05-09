@@ -26,6 +26,8 @@
 | `StatsTransport.CloseIdleConnections()` proxy method | N/A (reverted with group) | Clean but no measurable resource impact |
 | Remove `Connection: close` from google.go + cloudflare.go | RSS +5-8% | Connection reuse increases idle connection retention; no benefit for failed nodes |
 | Reduce `GetProxies` map hint (2048→1024 per sub) | RSS +1%, Heap +15% | Rehash cost still exceeds bucket savings at this scale |
+| `fmt.Sprintf` → `strconv` in updateProxyName + structured slog in check.go | RSS stable | Micro-optimization; code quality improvement with minor allocation reduction |
+| `fmt.Sprintf` → string concat for YT/TK tags | RSS stable | Removes per-node fmt.Sprintf for simple prefix patterns |
 
 ## Root-Cause Analysis (From Real Flamegraphs)
 
@@ -56,10 +58,16 @@
 3. **351 goroutines** — ~63% come from mihomo's internal connection management (WebSocket framing, QUIC streams, TLS state machines). These are outside project scope.
 4. **Channel blocking 86%** — This is natural backpressure in a producer-consumer pipeline. Alive workers block sending to speedChan; speed workers block on download I/O. Not a bug.
 
-## Potential Future Work (Outside Current Scope)
+## Potential Future Work (Outside Current Scope / Deferred)
 
-- **Replace goccy/go-yaml with a streaming YAML parser** for subscription parsing to eliminate 76% of heap allocations. High effort, high risk.
-- **Add a DNS cache layer** in `DialContext` to reduce repeated DNS lookups for common endpoints (google.com, cloudflare.com, etc.). Moderate effort, moderate risk.
-- **Share `http.Transport` base instances** across nodes that use the same underlying server, with per-node `DialContext` dispatch. Complex due to `StatsTransport` per-node isolation.
-- **Implement object pooling for `strings.Builder` in `GenerateProxyKey`** and `ProxyNode` maps. Low effort, but marginal gain (<1MB).
-- **Profile mihomo upstream** and contribute patches to reduce goroutine spawning per proxy connection. Requires deep mihomo expertise.
+- **Replace goccy/go-yaml with a streaming YAML parser** for subscription parsing to eliminate 76% of heap allocations. High effort, high risk. Requires extensive testing across all subscription formats.
+- **Share `http.Transport` base instances** across nodes that use the same underlying server, with per-node `DialContext` dispatch. Complex due to `StatsTransport` per-node isolation and mihomo proxy lifecycle.
+
+## Tried and Ruled Out
+
+- **Add a DNS cache layer** — DNS resolution happens inside mihomo's `DialContext`, not subs-check's custom `DialContext`. Cannot implement without modifying mihomo.
+- **Object pooling for `strings.Builder` / `ProxyNode` maps** — `GenerateProxyKey` runs during subscription fetch (pre-peak), pooling would save <1MB.
+- **Profile mihomo upstream** — Outside project scope per autoresearch.md constraints.
+- **Connection: close removal** — Increases idle connection retention; only benefits successful nodes, not measurable in current benchmark.
+- **Map hint reduction (2048→1024/256)** — Rehash cost outweighs bucket savings at tested scale.
+- **distributeJobs concurrency reduction** — Not the bottleneck; increases duration.
